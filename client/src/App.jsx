@@ -17,7 +17,7 @@ function App() {
 
   const askAtlas = async (question) => {
     try {
-      const response = await fetch("http://localhost:5000/api/ask", {
+      const response = await fetch("https://atlas-ai-1wd9.onrender.com/api/ask", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
