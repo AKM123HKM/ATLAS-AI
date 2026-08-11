@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
@@ -9,11 +8,6 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
-
 
 // -------------------------------------
 // HOME
@@ -26,15 +20,12 @@ app.get("/", (req, res) => {
   });
 });
 
-
 // -------------------------------------
 // ASK ATLAS
 // -------------------------------------
 
 app.post("/api/ask", async (req, res) => {
-
   try {
-
     const { question } = req.body;
 
     if (!question || !question.trim()) {
@@ -43,15 +34,23 @@ app.post("/api/ask", async (req, res) => {
       });
     }
 
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
 
-    const response = await ai.models.generateContent({
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
 
-      model: "gemini-3.6-flash",
+        body: JSON.stringify({
+          model: "openrouter/free",
 
-      contents: question,
-
-      config: {
-        systemInstruction: `
+          messages: [
+            {
+              role: "system",
+              content: `
 You are A.T.L.A.S 3K.
 
 A.T.L.A.S stands for:
@@ -60,7 +59,7 @@ Advanced Technology and Learning Assistant System.
 You are a futuristic AI assistant being demonstrated
 at a student science and technology exhibition.
 
-Your personality:
+Personality:
 - Intelligent
 - Calm
 - Helpful
@@ -86,54 +85,75 @@ You can answer questions about:
 - Other educational topics
 
 Rules:
-
 1. Answer directly.
-2. Keep normal answers relatively short because your
-   answer will be spoken aloud.
+2. Keep answers short because they will be spoken aloud.
 3. Avoid unnecessary headings and formatting.
 4. Do not say that you are a language model.
-5. If you don't know something, say so rather than
-   inventing an answer.
-6. For simple questions, answer in 1-4 sentences.
-7. For complicated questions, explain them clearly
-   but remain reasonably concise.
+5. If you don't know something, say so rather than inventing an answer.
+6. Simple questions should usually take 1-4 sentences.
+7. Complicated questions should be clear but reasonably concise.
 
 You are A.T.L.A.S 3K, not Gemini.
-        `,
+              `,
+            },
+            {
+              role: "user",
+              content: question,
+            },
+          ],
 
-        maxOutputTokens: 1000,
-      },
+          max_tokens: 300,
+        }),
+      }
+    );
 
-    });
+    const data = await response.json();
 
+    // -------------------------------------
+    // OPENROUTER ERROR
+    // -------------------------------------
 
-    const answer = response.text;
+    if (!response.ok) {
+      console.error("OPENROUTER ERROR:", data);
 
+      return res.status(response.status).json({
+        error: data?.error?.message || "OpenRouter request failed.",
+      });
+    }
+
+    // -------------------------------------
+    // GET ANSWER
+    // -------------------------------------
+
+    const answer = data?.choices?.[0]?.message?.content;
+
+    if (!answer) {
+      console.error("OPENROUTER RESPONSE:", data);
+
+      return res.status(500).json({
+        error: "OpenRouter returned no answer.",
+      });
+    }
 
     res.json({
-      answer,
+      answer: answer.trim(),
     });
 
   } catch (error) {
-
-    console.error("ATLAS AI ERROR:");
-    console.error(error);
+    console.error("ATLAS AI ERROR:", error);
 
     res.status(500).json({
       error: "A.T.L.A.S could not process the request.",
     });
-
   }
-
 });
 
+// -------------------------------------
+// SERVER
+// -------------------------------------
 
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-
-  console.log(
-    `ATLAS backend running on port ${PORT}`
-  );
-
+  console.log(`ATLAS backend running on port ${PORT}`);
 });
