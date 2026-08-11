@@ -1,0 +1,535 @@
+/* =========================================================
+   ATLAS RESULTS PAGE
+   ========================================================= */
+
+.results-page {
+  width: 100%;
+  height: calc(100vh - 110px);
+  overflow-y: auto;
+  padding: 45px 6vw 70px;
+  box-sizing: border-box;
+
+  background:
+    radial-gradient(
+      circle at 50% 0%,
+      rgba(67, 234, 255, 0.08),
+      transparent 40%
+    );
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.results-header {
+  max-width: 1200px;
+  margin: 0 auto 40px;
+}
+
+.results-label {
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: #43eaff;
+  margin-bottom: 14px;
+}
+
+.results-header h1 {
+  margin: 0;
+
+  font-size: clamp(32px, 4vw, 62px);
+  line-height: 1.05;
+
+  font-weight: 500;
+  letter-spacing: -1px;
+
+  color: #e9fbff;
+
+  text-shadow:
+    0 0 30px rgba(67, 234, 255, 0.18);
+}
+
+.question-display {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+
+  margin-top: 22px;
+
+  color: rgba(230, 250, 255, 0.65);
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.question-display span {
+  color: #43eaff;
+  font-size: 9px;
+  letter-spacing: 3px;
+  font-weight: bold;
+}
+
+/* =========================================================
+   LAYOUT
+   ========================================================= */
+
+.results-layout {
+  max-width: 1200px;
+  margin: auto;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+
+  gap: 35px;
+}
+
+.results-main {
+  min-width: 0;
+}
+
+/* =========================================================
+   IMAGE
+   ========================================================= */
+
+.results-image-card {
+  position: relative;
+
+  width: 100%;
+  height: 320px;
+
+  overflow: hidden;
+
+  border: 1px solid rgba(67, 234, 255, 0.25);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(67, 234, 255, 0.08),
+      rgba(0, 0, 0, 0.4)
+    );
+
+  box-shadow:
+    0 0 35px rgba(67, 234, 255, 0.06);
+
+  margin-bottom: 35px;
+}
+
+.results-image-card::after {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 40%,
+      rgba(2, 8, 13, 0.8)
+    );
+
+  pointer-events: none;
+}
+
+.results-image-card img {
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+
+  display: block;
+
+  opacity: 0.85;
+}
+
+/* =========================================================
+   ARTICLE
+   ========================================================= */
+
+.results-content {
+  padding: 0 5px;
+}
+
+.results-content p {
+  margin: 0 0 25px;
+
+  color: rgba(232, 249, 253, 0.82);
+
+  font-size: 17px;
+  line-height: 1.85;
+
+  font-weight: 350;
+}
+
+.results-content p:first-child {
+  color: #effcff;
+
+  font-size: 20px;
+  line-height: 1.75;
+}
+
+/* =========================================================
+   SECTION HEADINGS
+   ========================================================= */
+
+.section-heading {
+  margin-bottom: 18px;
+
+  font-size: 9px;
+  letter-spacing: 4px;
+
+  color: #43eaff;
+
+  font-weight: bold;
+}
+
+/* =========================================================
+   KEY FACTS
+   ========================================================= */
+
+.facts-section {
+  margin-top: 45px;
+  padding-top: 30px;
+
+  border-top: 1px solid rgba(67, 234, 255, 0.12);
+}
+
+.facts-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 12px;
+}
+
+.fact-card {
+  min-height: 90px;
+
+  padding: 20px;
+
+  box-sizing: border-box;
+
+  display: flex;
+  gap: 15px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(67, 234, 255, 0.07),
+      rgba(255, 255, 255, 0.015)
+    );
+
+  border:
+    1px solid rgba(67, 234, 255, 0.12);
+
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.fact-card:hover {
+  transform: translateY(-2px);
+
+  border-color:
+    rgba(67, 234, 255, 0.35);
+}
+
+.fact-card span {
+  color: #43eaff;
+
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+.fact-card p {
+  margin: 0;
+
+  color: rgba(230, 249, 253, 0.8);
+
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* =========================================================
+   LINKS
+   ========================================================= */
+
+.links-section {
+  margin-top: 45px;
+  padding-top: 30px;
+
+  border-top: 1px solid rgba(67, 234, 255, 0.12);
+}
+
+.links-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 12px;
+}
+
+.knowledge-link {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+
+  gap: 15px;
+
+  padding: 18px;
+
+  text-decoration: none;
+
+  background:
+    rgba(67, 234, 255, 0.035);
+
+  border:
+    1px solid rgba(67, 234, 255, 0.12);
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.knowledge-link:hover {
+  transform: translateY(-2px);
+
+  background:
+    rgba(67, 234, 255, 0.08);
+
+  border-color:
+    rgba(67, 234, 255, 0.4);
+}
+
+.link-number {
+  color: #43eaff;
+
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+.knowledge-link strong {
+  display: block;
+
+  color: #e8fbff;
+
+  font-size: 14px;
+
+  margin-bottom: 5px;
+}
+
+.knowledge-link small {
+  display: block;
+
+  color: rgba(230, 249, 253, 0.5);
+
+  font-size: 11px;
+
+  line-height: 1.5;
+}
+
+.link-arrow {
+  margin-left: auto;
+
+  color: #43eaff;
+
+  font-size: 18px;
+}
+
+/* =========================================================
+   SIDE PANEL
+   ========================================================= */
+
+.results-side {
+  display: flex;
+  flex-direction: column;
+
+  gap: 15px;
+}
+
+.atlas-side-card {
+  position: sticky;
+  top: 0;
+
+  padding: 28px;
+
+  border:
+    1px solid rgba(67, 234, 255, 0.18);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(67, 234, 255, 0.06),
+      rgba(0, 0, 0, 0.25)
+    );
+}
+
+.side-orb {
+  width: 85px;
+  height: 85px;
+
+  border-radius: 50%;
+
+  margin-bottom: 22px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border:
+    1px solid rgba(67, 234, 255, 0.6);
+
+  box-shadow:
+    0 0 35px rgba(67, 234, 255, 0.15),
+    inset 0 0 25px rgba(67, 234, 255, 0.08);
+}
+
+.side-orb span {
+  font-size: 32px;
+
+  color: #dffaff;
+
+  text-shadow:
+    0 0 20px #43eaff;
+}
+
+.side-status {
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+
+  font-size: 9px;
+  letter-spacing: 2px;
+
+  color: #43eaff;
+}
+
+.side-line {
+  height: 1px;
+
+  background:
+    rgba(67, 234, 255, 0.15);
+
+  margin: 22px 0;
+}
+
+.atlas-side-card p {
+  margin: 0;
+
+  color:
+    rgba(230, 249, 253, 0.62);
+
+  font-size: 12px;
+
+  line-height: 1.7;
+}
+
+/* =========================================================
+   RETURN BUTTON
+   ========================================================= */
+
+.back-command {
+  width: 100%;
+
+  padding: 15px;
+
+  border:
+    1px solid rgba(67, 234, 255, 0.2);
+
+  background:
+    rgba(67, 234, 255, 0.04);
+
+  color: #43eaff;
+
+  font-family: inherit;
+
+  font-size: 9px;
+
+  letter-spacing: 2px;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.back-command:hover {
+  background:
+    rgba(67, 234, 255, 0.1);
+
+  border-color:
+    rgba(67, 234, 255, 0.5);
+}
+
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
+
+.results-page::-webkit-scrollbar {
+  width: 5px;
+}
+
+.results-page::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.results-page::-webkit-scrollbar-thumb {
+  background:
+    rgba(67, 234, 255, 0.2);
+}
+
+.results-page::-webkit-scrollbar-thumb:hover {
+  background:
+    rgba(67, 234, 255, 0.4);
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .results-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .results-side {
+    order: -1;
+  }
+
+  .atlas-side-card {
+    position: static;
+  }
+
+  .facts-grid,
+  .links-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .results-page {
+    padding:
+      30px 20px 60px;
+  }
+
+  .results-image-card {
+    height: 220px;
+  }
+
+  .results-content p {
+    font-size: 15px;
+    line-height: 1.7;
+  }
+
+  .results-content p:first-child {
+    font-size: 17px;
+  }
+
+  .results-header h1 {
+    font-size: 34px;
+  }
+}
