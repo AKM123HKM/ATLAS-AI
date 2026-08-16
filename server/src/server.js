@@ -1,12 +1,10 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { create, all } from "mathjs";
 
 dotenv.config();
 
 const app = express();
-const math = create(all);
 
 app.use(cors());
 app.use(express.json());
@@ -18,89 +16,6 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.json({ name: "A.T.L.A.S 3K", status: "ONLINE" });
 });
-
-// -------------------------------------
-// NATIVE MATH SOLVER (No AI API)
-// -------------------------------------
-
-const MATH_SIGNALS = [
-  "solve",
-  "calculate",
-  "evaluate",
-  "compute",
-  "what is",
-  "how much is",
-  "+",
-  "-",
-  "*",
-  "/",
-  "^",
-  "%",
-  "=",
-  "sqrt",
-  "sin",
-  "cos",
-  "tan",
-  "log",
-  "factorial",
-];
-
-function isMathQuery(question) {
-  const q = question.toLowerCase().trim();
-  const hasNumbers = /\d/.test(q);
-  const hasOperators = /[+\-*\/^%$=]/.test(q);
-  const hasSignalWord = MATH_SIGNALS.some((sig) => q.includes(sig));
-
-  return hasNumbers && (hasOperators || hasSignalWord);
-}
-
-function cleanMathExpression(question) {
-  return question
-    .toLowerCase()
-    .replace(/what is|solve|calculate|evaluate|compute|please|=||\?/gi, "")
-    .replace(/\bx\b/g, "*") // Replace standalone 'x' with '*'
-    .trim();
-}
-
-function solveMathLocally(question) {
-  try {
-    const expr = cleanMathExpression(question);
-    if (!expr) return null;
-
-    // Safely evaluate math expressions (arithmetic, trigonometry, algebra)
-    const result = math.evaluate(expr);
-
-    if (result === undefined || result === null) return null;
-
-    const formattedResult =
-      typeof result === "number"
-        ? math.format(result, { precision: 14 })
-        : result.toString();
-
-    const paragraph1 = `Computation target: ${expr}`;
-    const paragraph2 = `The calculated result is ${formattedResult}.`;
-    const paragraph3 = `Processed locally by the A.T.L.A.S Core Mathematics Subsystem.`;
-
-    return {
-      title: "ATLAS Mathematical Computation Unit",
-      answer: `${paragraph1}\n\n${paragraph2}\n\n${paragraph3}`,
-      paragraphs: [paragraph1, paragraph2, paragraph3],
-      keyFacts: [
-        `Input Expression: ${expr}`,
-        `Evaluated Value: ${formattedResult}`,
-        `Execution Subsystem: Native Math Engine (Zero API latency)`,
-      ],
-      relatedLinks: [],
-      imageQuery: "mathematics geometry formula",
-      modelUsed: "ATLAS-Local-Math-Engine",
-      usedLiveNews: false,
-      wasTruncated: false,
-    };
-  } catch (error) {
-    // Return null on parsing errors so it gracefully falls back to OpenRouter
-    return null;
-  }
-}
 
 // -------------------------------------
 // IMAGE FETCH (Wikimedia Commons — free, no API key)
@@ -121,14 +36,18 @@ async function fetchImageUrl(query) {
 
     const data = await response.json();
     const pages = data?.query?.pages;
+
     if (!pages) return "";
 
     const candidates = Object.values(pages)
       .map((p) => p.imageinfo?.[0])
       .filter(Boolean)
-      .filter((info) => ["image/jpeg", "image/png"].includes(info.mime));
+      .filter((info) =>
+        ["image/jpeg", "image/png"].includes(info.mime)
+      );
 
     const chosen = candidates[0];
+
     return chosen ? chosen.thumburl || chosen.url || "" : "";
   } catch (error) {
     console.error("IMAGE FETCH ERROR:", error);
@@ -157,7 +76,10 @@ const NEWS_TRIGGER_WORDS = [
 
 function isNewsQuery(question) {
   const q = question.toLowerCase();
-  return NEWS_TRIGGER_WORDS.some((word) => q.includes(word));
+
+  return NEWS_TRIGGER_WORDS.some((word) =>
+    q.includes(word)
+  );
 }
 
 async function fetchNewsHeadlines(question) {
@@ -168,11 +90,15 @@ async function fetchNewsHeadlines(question) {
       "&hl=en-US&gl=US&ceid=US:en";
 
     const response = await fetch(url);
+
     if (!response.ok) return [];
 
     const xml = await response.text();
 
-    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 6);
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(
+      0,
+      6
+    );
 
     return items
       .map((match) => {
@@ -181,15 +107,27 @@ async function fetchNewsHeadlines(question) {
         const titleMatch = block.match(
           /<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/
         );
-        const pubDateMatch = block.match(/<pubDate>(.*?)<\/pubDate>/);
+
+        const pubDateMatch = block.match(
+          /<pubDate>(.*?)<\/pubDate>/
+        );
+
         const sourceMatch = block.match(
           /<source[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/source>/
         );
 
         return {
-          title: titleMatch ? titleMatch[1].trim() : "",
-          pubDate: pubDateMatch ? pubDateMatch[1].trim() : "",
-          source: sourceMatch ? sourceMatch[1].trim() : "",
+          title: titleMatch
+            ? titleMatch[1].trim()
+            : "",
+
+          pubDate: pubDateMatch
+            ? pubDateMatch[1].trim()
+            : "",
+
+          source: sourceMatch
+            ? sourceMatch[1].trim()
+            : "",
         };
       })
       .filter((item) => item.title);
@@ -218,16 +156,26 @@ async function callOpenRouter(systemPrompt, question) {
         "https://openrouter.ai/api/v1/chat/completions",
         {
           method: "POST",
+
           headers: {
             Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
             "Content-Type": "application/json",
           },
+
           body: JSON.stringify({
             model,
+
             messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: question },
+              {
+                role: "system",
+                content: systemPrompt,
+              },
+              {
+                role: "user",
+                content: question,
+              },
             ],
+
             max_tokens: 1800,
           }),
         }
@@ -236,23 +184,47 @@ async function callOpenRouter(systemPrompt, question) {
       const data = await response.json();
 
       if (!response.ok) {
-        console.error(`OPENROUTER ERROR (${model}):`, data);
+        console.error(
+          `OPENROUTER ERROR (${model}):`,
+          data
+        );
+
         lastError = data;
         continue;
       }
 
-      const rawContent = data?.choices?.[0]?.message?.content;
-      const finishReason = data?.choices?.[0]?.finish_reason;
+      const rawContent =
+        data?.choices?.[0]?.message?.content;
+
+      const finishReason =
+        data?.choices?.[0]?.finish_reason;
 
       if (!rawContent) {
-        lastError = { error: { message: "Empty response" } };
+        lastError = {
+          error: {
+            message: "Empty response",
+          },
+        };
+
         continue;
       }
 
-      return { rawContent, modelUsed: model, finishReason };
+      return {
+        rawContent,
+        modelUsed: model,
+        finishReason,
+      };
     } catch (error) {
-      console.error(`OPENROUTER FETCH FAILED (${model}):`, error);
-      lastError = { error: { message: error.message } };
+      console.error(
+        `OPENROUTER FETCH FAILED (${model}):`,
+        error
+      );
+
+      lastError = {
+        error: {
+          message: error.message,
+        },
+      };
     }
   }
 
@@ -290,51 +262,104 @@ Rules:
 - Keep the ANSWER section to 3-5 paragraphs, each adding new
   information — no filler.
 - FACTS and LINKS are optional — write "FACTS:" and "LINKS:" with
-  nothing under them if none apply. Only include links to well-known
-  reliable sites (Wikipedia, NASA, Britannica, official gov/org
-  sites). Never guess a URL you're not sure exists — omit it instead.
+  nothing under them if none apply.
+- Only include links to well-known reliable sites
+  (Wikipedia, NASA, Britannica, official gov/org sites).
+- Never guess a URL you're not sure exists — omit it instead.
 - IMAGE should be a plain noun phrase, not a URL.
-- Write ANSWER and everything else only ONCE. Do not repeat content.
+- Write ANSWER and everything else only ONCE.
+- For mathematical questions, perform the calculation yourself
+  and explain the result clearly.
 `;
+
+// -------------------------------------
+// PARSE ATLAS RESPONSE
+// -------------------------------------
 
 function parseAtlasResponse(rawContent, wasTruncated) {
   const text = rawContent.trim();
 
   const getSection = (label, nextLabels) => {
-    const startMatch = text.match(new RegExp(`${label}:\\s*`, "i"));
+    const startMatch = text.match(
+      new RegExp(`${label}:\\s*`, "i")
+    );
+
     if (!startMatch) return "";
 
-    const startIndex = startMatch.index + startMatch[0].length;
+    const startIndex =
+      startMatch.index + startMatch[0].length;
 
     let endIndex = text.length;
+
     for (const next of nextLabels) {
       const nextMatch = text
         .slice(startIndex)
-        .match(new RegExp(`\\n\\s*${next}:`, "i"));
+        .match(
+          new RegExp(`\\n\\s*${next}:`, "i")
+        );
+
       if (nextMatch) {
-        endIndex = Math.min(endIndex, startIndex + nextMatch.index);
+        endIndex = Math.min(
+          endIndex,
+          startIndex + nextMatch.index
+        );
       }
     }
 
-    return text.slice(startIndex, endIndex).trim();
+    return text
+      .slice(startIndex, endIndex)
+      .trim();
   };
 
-  const ALL_LABELS = ["TITLE", "ANSWER", "FACTS", "LINKS", "IMAGE"];
+  const ALL_LABELS = [
+    "TITLE",
+    "ANSWER",
+    "FACTS",
+    "LINKS",
+    "IMAGE",
+  ];
 
-  const title = getSection("TITLE", ALL_LABELS.filter((l) => l !== "TITLE"));
-  let answerBlock = getSection("ANSWER", ["FACTS", "LINKS", "IMAGE"]);
-  const factsBlock = getSection("FACTS", ["LINKS", "IMAGE"]);
-  const linksBlock = getSection("LINKS", ["IMAGE"]);
-  const imageQuery = getSection("IMAGE", []).split("\n")[0].trim();
+  const title = getSection(
+    "TITLE",
+    ALL_LABELS.filter((l) => l !== "TITLE")
+  );
+
+  let answerBlock = getSection(
+    "ANSWER",
+    ["FACTS", "LINKS", "IMAGE"]
+  );
+
+  const factsBlock = getSection(
+    "FACTS",
+    ["LINKS", "IMAGE"]
+  );
+
+  const linksBlock = getSection(
+    "LINKS",
+    ["IMAGE"]
+  );
+
+  const imageQuery = getSection(
+    "IMAGE",
+    []
+  )
+    .split("\n")[0]
+    .trim();
 
   let paragraphs = answerBlock
     .split(/\n\s*\n/)
-    .map((p) => p.replace(/\s+/g, " ").trim())
+    .map((p) =>
+      p.replace(/\s+/g, " ").trim()
+    )
     .filter(Boolean);
 
   if (wasTruncated && paragraphs.length > 1) {
-    const last = paragraphs[paragraphs.length - 1];
-    const endsCleanly = /[.!?]["')]?$/.test(last.trim());
+    const last =
+      paragraphs[paragraphs.length - 1];
+
+    const endsCleanly =
+      /[.!?]["')]?$/.test(last.trim());
+
     if (!endsCleanly) {
       paragraphs = paragraphs.slice(0, -1);
     }
@@ -344,32 +369,47 @@ function parseAtlasResponse(rawContent, wasTruncated) {
 
   const keyFacts = factsBlock
     .split("\n")
-    .map((line) => line.replace(/^-\s*/, "").trim())
+    .map((line) =>
+      line.replace(/^-\s*/, "").trim()
+    )
     .filter(Boolean);
 
   const relatedLinks = linksBlock
     .split("\n")
-    .map((line) => line.replace(/^-\s*/, "").trim())
-    .filter(Boolean)
+    .map((line) =>
+      line.replace(/^-\s*/, "").trim()
+    )
     .map((line) => {
-      const parts = line.split("|").map((p) => p.trim());
+      const parts = line
+        .split("|")
+        .map((p) => p.trim());
+
       if (parts.length < 2) return null;
+
       return {
         title: parts[0],
         url: parts[1],
         description: parts[2] || "",
       };
     })
-    .filter((link) => link && /^https?:\/\//.test(link.url));
+    .filter(
+      (link) =>
+        link &&
+        /^https?:\/\//.test(link.url)
+    );
 
   if (paragraphs.length === 0) {
     return {
-      title: title || "ATLAS Intelligence Report",
+      title:
+        title || "ATLAS Intelligence Report",
+
       answer:
         "I wasn't able to put together a complete answer that time. Please try asking again.",
+
       paragraphs: [
         "I wasn't able to put together a complete answer that time. Please try asking again.",
       ],
+
       keyFacts: [],
       relatedLinks: [],
       imageQuery: "",
@@ -377,7 +417,9 @@ function parseAtlasResponse(rawContent, wasTruncated) {
   }
 
   return {
-    title: title || "ATLAS Intelligence Report",
+    title:
+      title || "ATLAS Intelligence Report",
+
     answer,
     paragraphs,
     keyFacts,
@@ -395,36 +437,33 @@ app.post("/api/ask", async (req, res) => {
     const { question } = req.body;
 
     if (!question || !question.trim()) {
-      return res.status(400).json({ error: "No question provided" });
+      return res.status(400).json({
+        error: "No question provided",
+      });
     }
 
-    // 1. DIRECT LOCAL MATH COMPUTATION
-    if (isMathQuery(question)) {
-      const mathResult = solveMathLocally(question);
-      if (mathResult) {
-        const imageUrl = await fetchImageUrl(mathResult.imageQuery);
-        return res.json({
-          ...mathResult,
-          imageUrl,
-        });
-      }
-    }
+    // -------------------------------------
+    // LIVE NEWS FETCH
+    // -------------------------------------
 
-    // 2. LIVE NEWS FETCH (If not a math query)
     let newsContext = "";
     let usedLiveNews = false;
 
     if (isNewsQuery(question)) {
-      const headlines = await fetchNewsHeadlines(question);
+      const headlines =
+        await fetchNewsHeadlines(question);
 
       if (headlines.length > 0) {
         usedLiveNews = true;
+
         newsContext =
           "\n\nCURRENT HEADLINES (real, fetched just now — treat these as ground truth, ignore any conflicting internal knowledge):\n" +
           headlines
             .map(
               (h, i) =>
-                `${i + 1}. "${h.title}" — ${h.source || "unknown source"} (${
+                `${i + 1}. "${h.title}" — ${
+                  h.source || "unknown source"
+                } (${
                   h.pubDate || "date unknown"
                 })`
             )
@@ -432,7 +471,10 @@ app.post("/api/ask", async (req, res) => {
       }
     }
 
-    // 3. LLM CALL (Fallback for non-math queries or complex word problems)
+    // -------------------------------------
+    // LLM CALL
+    // -------------------------------------
+
     const systemPrompt = `
 You are A.T.L.A.S 3K.
 
@@ -440,35 +482,65 @@ A.T.L.A.S stands for:
 Advanced Technology and Learning Assistant System.
 
 You are a futuristic educational AI assistant being demonstrated
-at a student science and technology exhibition. The user is looking
-at a visual knowledge screen while you speak your answer aloud, and
-you also handle general questions, calculations, and problem solving.
+at a student science and technology exhibition.
+
+The user is looking at a visual knowledge screen while you speak
+your answer aloud.
+
+You handle:
+- General questions
+- Science
+- Mathematics
+- History
+- Technology
+- Programming
+- Logic
+- Problem solving
+- Current events
+- Educational explanations
 
 ${
   usedLiveNews
     ? `This question is about current events. You have been given real, freshly-fetched headlines below. Base your answer primarily on those headlines and reference source/date inline. Do NOT rely on older internal knowledge if it conflicts with the headlines.`
-    : `Answer from your general knowledge, working through any math or logic step by step in plain language.`
+    : `Answer from your general knowledge. For mathematical and logical questions, work through the problem carefully and provide the correct result.`
 }
 
-PERSONALITY: Intelligent, calm, helpful, slightly futuristic, confident, educational.
-Do not say you are a language model. Do not invent facts, sources, or URLs.
+PERSONALITY:
+Intelligent, calm, helpful, slightly futuristic,
+confident, educational.
+
+Do not say you are a language model.
+
+Do not invent facts, sources, or URLs.
 
 ${RESPONSE_TEMPLATE}
 
 User question:
 ${question}
+
 ${newsContext}
 `;
 
-    let rawContent, modelUsed, finishReason;
+    let rawContent;
+    let modelUsed;
+    let finishReason;
 
     try {
-      const result = await callOpenRouter(systemPrompt, question);
+      const result =
+        await callOpenRouter(
+          systemPrompt,
+          question
+        );
+
       rawContent = result.rawContent;
       modelUsed = result.modelUsed;
       finishReason = result.finishReason;
     } catch (err) {
-      console.error("ALL MODELS FAILED:", err);
+      console.error(
+        "ALL MODELS FAILED:",
+        err
+      );
+
       return res.status(502).json({
         error:
           err?.error?.message ||
@@ -476,11 +548,19 @@ ${newsContext}
       });
     }
 
-    const wasTruncated = finishReason === "length";
+    const wasTruncated =
+      finishReason === "length";
 
-    const parsed = parseAtlasResponse(rawContent, wasTruncated);
+    const parsed =
+      parseAtlasResponse(
+        rawContent,
+        wasTruncated
+      );
 
-    const imageUrl = await fetchImageUrl(parsed.imageQuery);
+    const imageUrl =
+      await fetchImageUrl(
+        parsed.imageQuery
+      );
 
     res.json({
       title: parsed.title,
@@ -495,10 +575,15 @@ ${newsContext}
       wasTruncated,
     });
   } catch (error) {
-    console.error("ATLAS AI ERROR:", error);
-    res
-      .status(500)
-      .json({ error: "A.T.L.A.S could not process the request." });
+    console.error(
+      "ATLAS AI ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      error:
+        "A.T.L.A.S could not process the request.",
+    });
   }
 });
 
@@ -506,8 +591,11 @@ ${newsContext}
 // SERVER
 // -------------------------------------
 
-const PORT = process.env.PORT || 5000;
+const PORT =
+  process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`ATLAS backend running on port ${PORT}`);
+  console.log(
+    `ATLAS backend running on port ${PORT}`
+  );
 });
