@@ -1,10 +1,12 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { create, all } from "mathjs";
 
 dotenv.config();
 
 const app = express();
+const math = create(all);
 
 app.use(cors());
 app.use(express.json());
@@ -14,11 +16,375 @@ app.use(express.json());
 // -------------------------------------
 
 app.get("/", (req, res) => {
-  res.json({
-    name: "A.T.L.A.S 3K",
-    status: "ONLINE",
-  });
+  res.json({ name: "A.T.L.A.S 3K", status: "ONLINE" });
 });
+
+// -------------------------------------
+// NATIVE MATH SOLVER (No AI API)
+// -------------------------------------
+
+const MATH_SIGNALS = [
+  "solve",
+  "calculate",
+  "evaluate",
+  "compute",
+  "what is",
+  "how much is",
+  "+",
+  "-",
+  "*",
+  "/",
+  "^",
+  "%",
+  "=",
+  "sqrt",
+  "sin",
+  "cos",
+  "tan",
+  "log",
+  "factorial",
+];
+
+function isMathQuery(question) {
+  const q = question.toLowerCase().trim();
+  const hasNumbers = /\d/.test(q);
+  const hasOperators = /[+\-*\/^%$=]/.test(q);
+  const hasSignalWord = MATH_SIGNALS.some((sig) => q.includes(sig));
+
+  return hasNumbers && (hasOperators || hasSignalWord);
+}
+
+function cleanMathExpression(question) {
+  return question
+    .toLowerCase()
+    .replace(/what is|solve|calculate|evaluate|compute|please|=||\?/gi, "")
+    .replace(/\bx\b/g, "*") // Replace standalone 'x' with '*'
+    .trim();
+}
+
+function solveMathLocally(question) {
+  try {
+    const expr = cleanMathExpression(question);
+    if (!expr) return null;
+
+    // Safely evaluate math expressions (arithmetic, trigonometry, algebra)
+    const result = math.evaluate(expr);
+
+    if (result === undefined || result === null) return null;
+
+    const formattedResult =
+      typeof result === "number"
+        ? math.format(result, { precision: 14 })
+        : result.toString();
+
+    const paragraph1 = `Computation target: ${expr}`;
+    const paragraph2 = `The calculated result is ${formattedResult}.`;
+    const paragraph3 = `Processed locally by the A.T.L.A.S Core Mathematics Subsystem.`;
+
+    return {
+      title: "ATLAS Mathematical Computation Unit",
+      answer: `${paragraph1}\n\n${paragraph2}\n\n${paragraph3}`,
+      paragraphs: [paragraph1, paragraph2, paragraph3],
+      keyFacts: [
+        `Input Expression: ${expr}`,
+        `Evaluated Value: ${formattedResult}`,
+        `Execution Subsystem: Native Math Engine (Zero API latency)`,
+      ],
+      relatedLinks: [],
+      imageQuery: "mathematics geometry formula",
+      modelUsed: "ATLAS-Local-Math-Engine",
+      usedLiveNews: false,
+      wasTruncated: false,
+    };
+  } catch (error) {
+    // Return null on parsing errors so it gracefully falls back to OpenRouter
+    return null;
+  }
+}
+
+// -------------------------------------
+// IMAGE FETCH (Wikimedia Commons — free, no API key)
+// -------------------------------------
+
+async function fetchImageUrl(query) {
+  if (!query || !query.trim()) return "";
+
+  try {
+    const searchUrl =
+      "https://commons.wikimedia.org/w/api.php" +
+      "?action=query&format=json&origin=*&generator=search" +
+      `&gsrsearch=${encodeURIComponent(query + " -logo -icon -flag")}` +
+      "&gsrlimit=5&gsrnamespace=6&prop=imageinfo&iiprop=url|mime&iiurlwidth=1200";
+
+    const response = await fetch(searchUrl);
+    if (!response.ok) return "";
+
+    const data = await response.json();
+    const pages = data?.query?.pages;
+    if (!pages) return "";
+
+    const candidates = Object.values(pages)
+      .map((p) => p.imageinfo?.[0])
+      .filter(Boolean)
+      .filter((info) => ["image/jpeg", "image/png"].includes(info.mime));
+
+    const chosen = candidates[0];
+    return chosen ? chosen.thumburl || chosen.url || "" : "";
+  } catch (error) {
+    console.error("IMAGE FETCH ERROR:", error);
+    return "";
+  }
+}
+
+// -------------------------------------
+// LIVE NEWS FETCH (Google News RSS — free, no API key)
+// -------------------------------------
+
+const NEWS_TRIGGER_WORDS = [
+  "latest",
+  "news",
+  "recent",
+  "recently",
+  "today",
+  "this week",
+  "this month",
+  "current",
+  "currently",
+  "update",
+  "breaking",
+  "happening now",
+];
+
+function isNewsQuery(question) {
+  const q = question.toLowerCase();
+  return NEWS_TRIGGER_WORDS.some((word) => q.includes(word));
+}
+
+async function fetchNewsHeadlines(question) {
+  try {
+    const url =
+      "https://news.google.com/rss/search?q=" +
+      encodeURIComponent(question) +
+      "&hl=en-US&gl=US&ceid=US:en";
+
+    const response = await fetch(url);
+    if (!response.ok) return [];
+
+    const xml = await response.text();
+
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 6);
+
+    return items
+      .map((match) => {
+        const block = match[1];
+
+        const titleMatch = block.match(
+          /<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/
+        );
+        const pubDateMatch = block.match(/<pubDate>(.*?)<\/pubDate>/);
+        const sourceMatch = block.match(
+          /<source[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/source>/
+        );
+
+        return {
+          title: titleMatch ? titleMatch[1].trim() : "",
+          pubDate: pubDateMatch ? pubDateMatch[1].trim() : "",
+          source: sourceMatch ? sourceMatch[1].trim() : "",
+        };
+      })
+      .filter((item) => item.title);
+  } catch (error) {
+    console.error("NEWS FETCH ERROR:", error);
+    return [];
+  }
+}
+
+// -------------------------------------
+// LLM CALL (with model fallback)
+// -------------------------------------
+
+const MODEL_CANDIDATES = [
+  "openai/gpt-oss-20b:free",
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "openrouter/free",
+];
+
+async function callOpenRouter(systemPrompt, question) {
+  let lastError = null;
+
+  for (const model of MODEL_CANDIDATES) {
+    try {
+      const response = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: question },
+            ],
+            max_tokens: 1800,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(`OPENROUTER ERROR (${model}):`, data);
+        lastError = data;
+        continue;
+      }
+
+      const rawContent = data?.choices?.[0]?.message?.content;
+      const finishReason = data?.choices?.[0]?.finish_reason;
+
+      if (!rawContent) {
+        lastError = { error: { message: "Empty response" } };
+        continue;
+      }
+
+      return { rawContent, modelUsed: model, finishReason };
+    } catch (error) {
+      console.error(`OPENROUTER FETCH FAILED (${model}):`, error);
+      lastError = { error: { message: error.message } };
+    }
+  }
+
+  throw lastError || new Error("All models failed");
+}
+
+// -------------------------------------
+// PLAIN-TEXT RESPONSE FORMAT
+// -------------------------------------
+
+const RESPONSE_TEMPLATE = `
+Respond in EXACTLY this plain-text format. Do not use JSON. Do not
+use markdown symbols like ** or #. Use plain sentences only.
+
+TITLE: <a short title for the topic>
+
+ANSWER:
+<paragraph 1>
+
+<paragraph 2>
+
+<paragraph 3 (add a 4th or 5th only if genuinely needed)>
+
+FACTS:
+- <short fact 1>
+- <short fact 2>
+- <short fact 3>
+
+LINKS:
+- <site name> | <full URL> | <one-line description>
+
+IMAGE: <2-4 words describing the main visual subject, plain noun phrase>
+
+Rules:
+- Keep the ANSWER section to 3-5 paragraphs, each adding new
+  information — no filler.
+- FACTS and LINKS are optional — write "FACTS:" and "LINKS:" with
+  nothing under them if none apply. Only include links to well-known
+  reliable sites (Wikipedia, NASA, Britannica, official gov/org
+  sites). Never guess a URL you're not sure exists — omit it instead.
+- IMAGE should be a plain noun phrase, not a URL.
+- Write ANSWER and everything else only ONCE. Do not repeat content.
+`;
+
+function parseAtlasResponse(rawContent, wasTruncated) {
+  const text = rawContent.trim();
+
+  const getSection = (label, nextLabels) => {
+    const startMatch = text.match(new RegExp(`${label}:\\s*`, "i"));
+    if (!startMatch) return "";
+
+    const startIndex = startMatch.index + startMatch[0].length;
+
+    let endIndex = text.length;
+    for (const next of nextLabels) {
+      const nextMatch = text
+        .slice(startIndex)
+        .match(new RegExp(`\\n\\s*${next}:`, "i"));
+      if (nextMatch) {
+        endIndex = Math.min(endIndex, startIndex + nextMatch.index);
+      }
+    }
+
+    return text.slice(startIndex, endIndex).trim();
+  };
+
+  const ALL_LABELS = ["TITLE", "ANSWER", "FACTS", "LINKS", "IMAGE"];
+
+  const title = getSection("TITLE", ALL_LABELS.filter((l) => l !== "TITLE"));
+  let answerBlock = getSection("ANSWER", ["FACTS", "LINKS", "IMAGE"]);
+  const factsBlock = getSection("FACTS", ["LINKS", "IMAGE"]);
+  const linksBlock = getSection("LINKS", ["IMAGE"]);
+  const imageQuery = getSection("IMAGE", []).split("\n")[0].trim();
+
+  let paragraphs = answerBlock
+    .split(/\n\s*\n/)
+    .map((p) => p.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  if (wasTruncated && paragraphs.length > 1) {
+    const last = paragraphs[paragraphs.length - 1];
+    const endsCleanly = /[.!?]["')]?$/.test(last.trim());
+    if (!endsCleanly) {
+      paragraphs = paragraphs.slice(0, -1);
+    }
+  }
+
+  const answer = paragraphs.join("\n\n");
+
+  const keyFacts = factsBlock
+    .split("\n")
+    .map((line) => line.replace(/^-\s*/, "").trim())
+    .filter(Boolean);
+
+  const relatedLinks = linksBlock
+    .split("\n")
+    .map((line) => line.replace(/^-\s*/, "").trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split("|").map((p) => p.trim());
+      if (parts.length < 2) return null;
+      return {
+        title: parts[0],
+        url: parts[1],
+        description: parts[2] || "",
+      };
+    })
+    .filter((link) => link && /^https?:\/\//.test(link.url));
+
+  if (paragraphs.length === 0) {
+    return {
+      title: title || "ATLAS Intelligence Report",
+      answer:
+        "I wasn't able to put together a complete answer that time. Please try asking again.",
+      paragraphs: [
+        "I wasn't able to put together a complete answer that time. Please try asking again.",
+      ],
+      keyFacts: [],
+      relatedLinks: [],
+      imageQuery: "",
+    };
+  }
+
+  return {
+    title: title || "ATLAS Intelligence Report",
+    answer,
+    paragraphs,
+    keyFacts,
+    relatedLinks,
+    imageQuery,
+  };
+}
 
 // -------------------------------------
 // ASK ATLAS
@@ -29,340 +395,110 @@ app.post("/api/ask", async (req, res) => {
     const { question } = req.body;
 
     if (!question || !question.trim()) {
-      return res.status(400).json({
-        error: "No question provided",
-      });
+      return res.status(400).json({ error: "No question provided" });
     }
 
-    const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
+    // 1. DIRECT LOCAL MATH COMPUTATION
+    if (isMathQuery(question)) {
+      const mathResult = solveMathLocally(question);
+      if (mathResult) {
+        const imageUrl = await fetchImageUrl(mathResult.imageQuery);
+        return res.json({
+          ...mathResult,
+          imageUrl,
+        });
+      }
+    }
 
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
+    // 2. LIVE NEWS FETCH (If not a math query)
+    let newsContext = "";
+    let usedLiveNews = false;
 
-        body: JSON.stringify({
-          model: "openrouter/free",
+    if (isNewsQuery(question)) {
+      const headlines = await fetchNewsHeadlines(question);
 
-          messages: [
-            {
-              role: "system",
+      if (headlines.length > 0) {
+        usedLiveNews = true;
+        newsContext =
+          "\n\nCURRENT HEADLINES (real, fetched just now — treat these as ground truth, ignore any conflicting internal knowledge):\n" +
+          headlines
+            .map(
+              (h, i) =>
+                `${i + 1}. "${h.title}" — ${h.source || "unknown source"} (${
+                  h.pubDate || "date unknown"
+                })`
+            )
+            .join("\n");
+      }
+    }
 
-              content: `
+    // 3. LLM CALL (Fallback for non-math queries or complex word problems)
+    const systemPrompt = `
 You are A.T.L.A.S 3K.
 
 A.T.L.A.S stands for:
 Advanced Technology and Learning Assistant System.
 
 You are a futuristic educational AI assistant being demonstrated
-at a student science and technology exhibition.
+at a student science and technology exhibition. The user is looking
+at a visual knowledge screen while you speak your answer aloud, and
+you also handle general questions, calculations, and problem solving.
 
-Your job is NOT simply to give a short chatbot answer.
-
-The user is looking at a large visual knowledge screen while
-you speak your answer aloud.
-
-Therefore, generate TWO things conceptually:
-
-1. A rich educational explanation for the visual screen.
-2. The SAME explanation in a form that can naturally be spoken aloud.
-
-IMPORTANT:
-
-The final "answer" must contain the complete explanation.
-It should NOT be limited to 4-5 lines.
-
-For normal educational questions, provide approximately
-5-8 meaningful paragraphs.
-
-Each paragraph should add new information.
-
-Explain:
-- what the thing is
-- how it works
-- why it is important
-- useful examples
-- interesting facts
-- related concepts when appropriate
-
-Do NOT pad the answer with meaningless sentences.
-
-For simple questions, you may use fewer paragraphs.
-For complicated questions, provide more detailed explanations.
-
-Do not make the answer unnecessarily complicated.
-
-PERSONALITY:
-
-- Intelligent
-- Calm
-- Helpful
-- Slightly futuristic
-- Confident
-- Educational
-
-Do not say that you are a language model.
-
-Do not pretend to have searched the internet.
-
-Do not invent facts.
-
-Return ONLY valid JSON.
-
-Use EXACTLY this structure:
-
-{
-  "title": "Short title of the topic",
-
-  "answer": "The complete detailed explanation in plain text. Use multiple paragraphs separated by \\n\\n.",
-
-  "paragraphs": [
-    "First substantial paragraph.",
-    "Second substantial paragraph.",
-    "Third substantial paragraph.",
-    "Fourth substantial paragraph."
-  ],
-
-  "keyFacts": [
-    "Important fact 1",
-    "Important fact 2",
-    "Important fact 3",
-    "Important fact 4"
-  ],
-
-  "relatedLinks": [
-    {
-      "title": "Wikipedia",
-      "url": "https://en.wikipedia.org/wiki/RELEVANT_TOPIC",
-      "description": "A general reference about the topic."
-    }
-  ],
-
-  "imageQuery": "2-4 simple words describing the main topic"
+${
+  usedLiveNews
+    ? `This question is about current events. You have been given real, freshly-fetched headlines below. Base your answer primarily on those headlines and reference source/date inline. Do NOT rely on older internal knowledge if it conflicts with the headlines.`
+    : `Answer from your general knowledge, working through any math or logic step by step in plain language.`
 }
 
-LINK RULES:
+PERSONALITY: Intelligent, calm, helpful, slightly futuristic, confident, educational.
+Do not say you are a language model. Do not invent facts, sources, or URLs.
 
-Only provide links to reliable, well-known websites.
-
-Good examples:
-- Wikipedia
-- NASA
-- Britannica
-- official government websites
-- official scientific organizations
-- official documentation
-
-Do NOT invent obscure websites.
-
-If you are unsure about an exact URL,
-use a Wikipedia URL only when you know the article exists.
-Otherwise return an empty relatedLinks array.
-
-IMAGE RULE:
-
-imageQuery should describe the main visual subject.
-
-Examples:
-
-"solar system planets"
-
-"human heart anatomy"
-
-"computer processor"
-
-"black hole space"
-
-"DNA molecule"
-
-Do not provide an image URL.
-
-The frontend will obtain the visual separately.
-
-IMPORTANT:
-
-The "answer" field is what A.T.L.A.S will speak aloud.
-
-Therefore it must contain the complete explanation,
-not a summary.
-
-The "paragraphs" field is what the visual knowledge screen
-will display.
-
-Keep the paragraphs consistent with the answer.
+${RESPONSE_TEMPLATE}
 
 User question:
-
 ${question}
-`,
-            },
+${newsContext}
+`;
 
-            {
-              role: "user",
-              content: question,
-            },
-          ],
-
-          // Much larger than before.
-          max_tokens: 1500,
-        }),
-      }
-    );
-
-    const data = await response.json();
-
-    // -------------------------------------
-    // OPENROUTER ERROR
-    // -------------------------------------
-
-    if (!response.ok) {
-      console.error("OPENROUTER ERROR:", data);
-
-      return res.status(response.status).json({
-        error:
-          data?.error?.message ||
-          "OpenRouter request failed.",
-      });
-    }
-
-    // -------------------------------------
-    // GET MODEL RESPONSE
-    // -------------------------------------
-
-    const rawContent =
-      data?.choices?.[0]?.message?.content;
-
-    if (!rawContent) {
-      console.error(
-        "OPENROUTER RESPONSE:",
-        data
-      );
-
-      return res.status(500).json({
-        error: "OpenRouter returned no answer.",
-      });
-    }
-
-    // -------------------------------------
-    // CLEAN JSON
-    // -------------------------------------
-
-    let parsed;
+    let rawContent, modelUsed, finishReason;
 
     try {
-      let cleaned = rawContent.trim();
-
-      // Sometimes models wrap JSON in ```json
-      if (cleaned.startsWith("```")) {
-        cleaned = cleaned
-          .replace(/^```json\s*/i, "")
-          .replace(/^```\s*/i, "")
-          .replace(/\s*```$/i, "");
-      }
-
-      parsed = JSON.parse(cleaned);
-    } catch (jsonError) {
-      console.error(
-        "JSON PARSE ERROR:",
-        jsonError
-      );
-
-      console.error(
-        "RAW MODEL RESPONSE:",
-        rawContent
-      );
-
-      // Fallback if model ignored JSON instruction.
-      parsed = {
-        title: "ATLAS Intelligence Report",
-
-        answer: rawContent.trim(),
-
-        paragraphs: [
-          rawContent.trim(),
-        ],
-
-        keyFacts: [],
-
-        relatedLinks: [],
-
-        imageQuery: "",
-      };
+      const result = await callOpenRouter(systemPrompt, question);
+      rawContent = result.rawContent;
+      modelUsed = result.modelUsed;
+      finishReason = result.finishReason;
+    } catch (err) {
+      console.error("ALL MODELS FAILED:", err);
+      return res.status(502).json({
+        error:
+          err?.error?.message ||
+          "All available AI models are currently unavailable. Try again shortly.",
+      });
     }
 
-    // -------------------------------------
-    // NORMALIZE RESPONSE
-    // -------------------------------------
+    const wasTruncated = finishReason === "length";
 
-    const answer =
-      typeof parsed.answer === "string"
-        ? parsed.answer.trim()
-        : "";
+    const parsed = parseAtlasResponse(rawContent, wasTruncated);
 
-    const paragraphs = Array.isArray(
-      parsed.paragraphs
-    )
-      ? parsed.paragraphs.filter(
-          (item) =>
-            typeof item === "string" &&
-            item.trim()
-        )
-      : [];
-
-    const keyFacts = Array.isArray(
-      parsed.keyFacts
-    )
-      ? parsed.keyFacts.filter(
-          (item) =>
-            typeof item === "string" &&
-            item.trim()
-        )
-      : [];
-
-    const relatedLinks = Array.isArray(
-      parsed.relatedLinks
-    )
-      ? parsed.relatedLinks.filter(
-          (link) =>
-            link &&
-            typeof link.title === "string" &&
-            typeof link.url === "string"
-        )
-      : [];
+    const imageUrl = await fetchImageUrl(parsed.imageQuery);
 
     res.json({
-      title:
-        parsed.title ||
-        "ATLAS Intelligence Report",
-
-      answer,
-
-      paragraphs:
-        paragraphs.length > 0
-          ? paragraphs
-          : answer
-          ? [answer]
-          : [],
-
-      keyFacts,
-
-      relatedLinks,
-
-      imageQuery:
-        typeof parsed.imageQuery === "string"
-          ? parsed.imageQuery
-          : "",
+      title: parsed.title,
+      answer: parsed.answer,
+      paragraphs: parsed.paragraphs,
+      keyFacts: parsed.keyFacts,
+      relatedLinks: parsed.relatedLinks,
+      imageQuery: parsed.imageQuery,
+      imageUrl,
+      modelUsed,
+      usedLiveNews,
+      wasTruncated,
     });
   } catch (error) {
     console.error("ATLAS AI ERROR:", error);
-
-    res.status(500).json({
-      error:
-        "A.T.L.A.S could not process the request.",
-    });
+    res
+      .status(500)
+      .json({ error: "A.T.L.A.S could not process the request." });
   }
 });
 
@@ -373,7 +509,5 @@ ${question}
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(
-    `ATLAS backend running on port ${PORT}`
-  );
+  console.log(`ATLAS backend running on port ${PORT}`);
 });

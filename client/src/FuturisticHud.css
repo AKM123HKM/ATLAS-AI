@@ -1,0 +1,343 @@
+/* =========================================================
+   A.T.L.A.S 3K — FUTURISTIC HUD
+   Decorative layer system
+========================================================= */
+
+
+/* =========================================================
+   PARTICLE FIELD
+========================================================= */
+
+.particle-field {
+  position: fixed;
+  inset: 0;
+
+  width: 100vw;
+  height: 100vh;
+
+  z-index: 0;
+
+  pointer-events: none;
+}
+
+
+/* =========================================================
+   APPLICATION LAYER
+========================================================= */
+
+.app,
+.boot-screen {
+  position: relative;
+
+  width: 100%;
+  min-height: 100vh;
+
+  background: transparent;
+
+  z-index: 1;
+}
+
+
+/*
+   IMPORTANT:
+   Do NOT use .app > * here.
+   The particle canvas is also a child of .app.
+*/
+
+
+/* =========================================================
+   ACTUAL UI LAYERS
+========================================================= */
+
+.topbar,
+.dashboard,
+.results-page,
+footer {
+  position: relative;
+  z-index: 2;
+}
+
+
+/* =========================================================
+   HUD CORNER BRACKETS
+========================================================= */
+
+.hud-corner {
+  position: fixed;
+
+  width: 46px;
+  height: 46px;
+
+  z-index: 10;
+
+  pointer-events: none;
+
+  opacity: 0.55;
+}
+
+
+/* Corner glow lines */
+
+.hud-corner::before,
+.hud-corner::after {
+  content: "";
+
+  position: absolute;
+
+  background: #43eaff;
+
+  box-shadow:
+    0 0 6px rgba(67, 234, 255, 0.8),
+    0 0 14px rgba(67, 234, 255, 0.35);
+}
+
+
+/* Horizontal */
+
+.hud-corner::before {
+  width: 100%;
+  height: 2px;
+}
+
+
+/* Vertical */
+
+.hud-corner::after {
+  width: 2px;
+  height: 100%;
+}
+
+
+/* =========================================================
+   TOP LEFT
+========================================================= */
+
+.hud-corner-tl {
+  top: 14px;
+  left: 14px;
+}
+
+.hud-corner-tl::before,
+.hud-corner-tl::after {
+  top: 0;
+  left: 0;
+}
+
+
+/* =========================================================
+   TOP RIGHT
+========================================================= */
+
+.hud-corner-tr {
+  top: 14px;
+  right: 14px;
+}
+
+.hud-corner-tr::before,
+.hud-corner-tr::after {
+  top: 0;
+  right: 0;
+}
+
+
+/* =========================================================
+   BOTTOM LEFT
+========================================================= */
+
+.hud-corner-bl {
+  bottom: 14px;
+  left: 14px;
+}
+
+.hud-corner-bl::before,
+.hud-corner-bl::after {
+  bottom: 0;
+  left: 0;
+}
+
+
+/* =========================================================
+   BOTTOM RIGHT
+========================================================= */
+
+.hud-corner-br {
+  bottom: 14px;
+  right: 14px;
+}
+
+.hud-corner-br::before,
+.hud-corner-br::after {
+  bottom: 0;
+  right: 0;
+}
+
+
+/* =========================================================
+   SCANLINE OVERLAY
+========================================================= */
+
+.hud-scanlines {
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 9;
+
+  pointer-events: none;
+
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(67, 234, 255, 0.018) 0px,
+      rgba(67, 234, 255, 0.018) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+
+  mix-blend-mode: screen;
+}
+
+
+/* =========================================================
+   RADAR SWEEP
+========================================================= */
+
+.radar-sweep {
+  position: absolute;
+
+  width: 520px;
+  height: 520px;
+
+  border-radius: 50%;
+
+  border: 1px solid rgba(67, 234, 255, 0.15);
+
+  background:
+    conic-gradient(
+      from 0deg,
+      rgba(67, 234, 255, 0.18),
+      transparent 25%,
+      transparent 100%
+    );
+
+  animation: radarSpin 4s linear infinite;
+
+  pointer-events: none;
+
+  z-index: 0;
+}
+
+
+/* Radar inner rings */
+
+.radar-sweep::before,
+.radar-sweep::after {
+  content: "";
+
+  position: absolute;
+
+  border-radius: 50%;
+
+  border: 1px solid rgba(67, 234, 255, 0.08);
+}
+
+
+/* Inner ring */
+
+.radar-sweep::before {
+  inset: 60px;
+}
+
+
+/* Inner-most ring */
+
+.radar-sweep::after {
+  inset: 130px;
+}
+
+
+/* =========================================================
+   RADAR ANIMATION
+========================================================= */
+
+@keyframes radarSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* =========================================================
+   RESULTS PAGE SCROLLING
+========================================================= */
+
+.results-page {
+  height: calc(100vh - 100px);
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  scrollbar-width: thin;
+  scrollbar-color: rgba(67, 234, 255, 0.35) transparent;
+}
+
+
+/* Chrome / Edge scrollbar */
+
+.results-page::-webkit-scrollbar {
+  width: 5px;
+}
+
+.results-page::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.results-page::-webkit-scrollbar-thumb {
+  background: rgba(67, 234, 255, 0.35);
+
+  border-radius: 10px;
+}
+
+.results-page::-webkit-scrollbar-thumb:hover {
+  background: rgba(67, 234, 255, 0.65);
+}
+
+
+/* =========================================================
+   RESPONSIVE HUD
+========================================================= */
+
+@media (max-width: 900px) {
+
+  .hud-corner {
+    width: 32px;
+    height: 32px;
+  }
+
+  .radar-sweep {
+    width: 400px;
+    height: 400px;
+  }
+
+}
+
+
+@media (max-width: 600px) {
+
+  .hud-corner {
+    width: 25px;
+    height: 25px;
+
+    opacity: 0.4;
+  }
+
+  .radar-sweep {
+    width: 300px;
+    height: 300px;
+  }
+
+}
