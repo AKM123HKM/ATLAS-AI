@@ -112,6 +112,26 @@ function HudFrame() {
 }
 
 // =========================================================
+// APPROXIMATE LOCATION VIA IP (fallback when GPS/geolocation
+// permission is denied or unavailable)
+// =========================================================
+
+async function getApproxLocationByIP() {
+  try {
+    const res = await fetch("https://ipapi.co/json/");
+    const data = await res.json();
+
+    if (data && data.latitude && data.longitude) {
+      return { lat: data.latitude, lon: data.longitude };
+    }
+  } catch (err) {
+    console.error("IP LOCATION FAILED:", err);
+  }
+
+  return null;
+}
+
+// =========================================================
 // APP
 // =========================================================
 
@@ -126,6 +146,7 @@ function App() {
   const [showWeather, setShowWeather] = useState(false);
   const [weatherLocation, setWeatherLocation] =
     useState("Greater Noida");
+  const [weatherCoords, setWeatherCoords] = useState(null);
 
   const [booted, setBooted] = useState(false);
   const [status, setStatus] = useState("SYSTEM INITIALIZING");
@@ -141,6 +162,20 @@ function App() {
 
   const recognitionRef = useRef(null);
   const wakeWordRecognitionRef = useRef(null);
+
+  // Always-current mirrors of showMusic/showWeather, used inside
+  // setTimeout/speech callbacks so they never read a stale value
+  // from the render that created the closure.
+  const showMusicRef = useRef(false);
+  const showWeatherRef = useRef(false);
+
+  useEffect(() => {
+    showMusicRef.current = showMusic;
+  }, [showMusic]);
+
+  useEffect(() => {
+    showWeatherRef.current = showWeather;
+  }, [showWeather]);
 
   const isProcessingRef = useRef(false);
 
@@ -357,39 +392,6 @@ function App() {
       return false;
     }
 
-    const songs = [
-      {
-        title: "Bairan",
-        aliases: [
-          "bairan",
-          "barren",
-          "bairen",
-          "byran",
-          "byron",
-          "biran",
-        ],
-      },
-
-      {
-        title: "Safar",
-        aliases: [
-          "safar",
-          "suffer",
-          "saffer",
-          "safarh",
-        ],
-      },
-
-      {
-        title: "For a Reason",
-        aliases: [
-          "for a reason",
-          "for the reason",
-          "for reason",
-        ],
-      },
-    ];
-
     const command = q
       .replace(/\bplay\b/g, "")
       .replace(/\bsong\b/g, "")
@@ -397,52 +399,39 @@ function App() {
       .replace(/\bthe\b/g, "")
       .trim();
 
-    console.log("ATLAS MUSIC SEARCH:", command);
+    console.log("ATLAS MUSIC REQUEST:", command);
 
-    for (const song of songs) {
-      for (const alias of song.aliases) {
-        if (command.includes(alias)) {
-          console.log(
-            "ATLAS SONG FOUND:",
-            song.title
-          );
+    const genericFillers = [
+      "",
+      "a",
+      "a song",
+      "some",
+      "something",
+      "anything",
+    ];
 
-          isProcessingRef.current = true;
+    const cleanedCommand = genericFillers.includes(command)
+      ? null
+      : command;
 
-          setSongToPlay(song.title);
+    // Any "play ..." request now opens the music system. MusicPlayer
+    // checks the local library first, then falls back to an online
+    // (YouTube) search for anything not bundled locally — so this no
+    // longer needs to pre-match aliases here or silently fall through
+    // to the general AI chat when the song isn't one of the 3 local
+    // files.
+    isProcessingRef.current = true;
 
-          setShowMusic(true);
+    setSongToPlay(cleanedCommand);
+    setShowMusic(true);
 
-          setStatus(
-            "PLAYING " +
-              song.title.toUpperCase()
-          );
+    setStatus(
+      cleanedCommand
+        ? "SEARCHING MUSIC: " + cleanedCommand.toUpperCase()
+        : "MUSIC SYSTEM"
+    );
 
-          return true;
-        }
-      }
-    }
-
-    if (
-      command === "" ||
-      command === "a" ||
-      command === "a song" ||
-      command === "something"
-    ) {
-      console.log(
-        "ATLAS: OPENING MUSIC LIBRARY"
-      );
-
-      isProcessingRef.current = true;
-
-      setSongToPlay(null);
-      setShowMusic(true);
-      setStatus("MUSIC SYSTEM");
-
-      return true;
-    }
-
-    return false;
+    return true;
   };
 
   // =========================================================
@@ -551,7 +540,25 @@ function App() {
   // =========================================================
 
   const speak = (text) => {
-    if (!text || !text.trim()) return;
+    if (!text || !text.trim()) {
+      // Nothing to say — don't leave the mic permanently locked.
+      isProcessingRef.current = false;
+
+      if (
+        !showMusicRef.current &&
+        !showWeatherRef.current
+      ) {
+        setStatus(
+          "WAITING FOR WAKE WORD"
+        );
+
+        setTimeout(() => {
+          startWakeWordDetection();
+        }, 300);
+      }
+
+      return;
+    }
 
     window.speechSynthesis.cancel();
 
@@ -611,13 +618,13 @@ function App() {
 
       // Do not restart wake-word detection
       // while music player is open.
-      if (showMusic) {
+      if (showMusicRef.current) {
         return;
       }
 
       // Do not restart wake-word detection
       // while weather dialog is open.
-      if (showWeather) {
+      if (showWeatherRef.current) {
         return;
       }
 
@@ -699,13 +706,16 @@ function App() {
         "ATLAS: WEATHER COMMAND"
       );
 
-      // Try to extract location
+      // Only extract a location when a connector word is present
+      // ("weather in Delhi", "weather for Mumbai"). Without it,
+      // ATLAS falls back to the device's current location instead
+      // of misreading a stray word as a city name.
       const locationMatch =
         lowerQuestion.match(
-          /(?:weather|climate|temperature)(?:\s+(?:in|for|at|of))?\s+([a-zA-Z\s]+?)(?:\s+today|\s+tomorrow|\s+right now|\s+now)?$/i
+          /(?:weather|climate|temperature)\s+(?:in|for|at|of)\s+([a-zA-Z\s]+?)(?:\s+today|\s+tomorrow|\s+right now|\s+now)?$/i
         );
 
-      let location = "Greater Noida";
+      let location = null;
 
       if (
         locationMatch &&
@@ -715,11 +725,6 @@ function App() {
           locationMatch[1].trim();
       }
 
-      console.log(
-        "ATLAS WEATHER LOCATION:",
-        location
-      );
-
       setUserText(question);
 
       setAiText("");
@@ -728,14 +733,73 @@ function App() {
 
       setShowResults(false);
 
-      setWeatherLocation(location);
-
-      setShowWeather(true);
-
       setStatus("WEATHER SYSTEM");
 
       // Prevent OpenRouter/API request
       isProcessingRef.current = true;
+
+      if (location) {
+        console.log(
+          "ATLAS WEATHER LOCATION:",
+          location
+        );
+
+        setWeatherCoords(null);
+        setWeatherLocation(location);
+        setShowWeather(true);
+
+        return;
+      }
+
+      console.log(
+        "ATLAS WEATHER: NO CITY NAMED, USING CURRENT LOCATION"
+      );
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setWeatherCoords({
+              lat: pos.coords.latitude,
+              lon: pos.coords.longitude,
+            });
+
+            setWeatherLocation(null);
+            setShowWeather(true);
+          },
+          async () => {
+            const ipLoc =
+              await getApproxLocationByIP();
+
+            if (ipLoc) {
+              setWeatherCoords(ipLoc);
+              setWeatherLocation(null);
+            } else {
+              setWeatherCoords(null);
+              setWeatherLocation(
+                "Greater Noida"
+              );
+            }
+
+            setShowWeather(true);
+          },
+          { timeout: 6000 }
+        );
+      } else {
+        const ipLoc =
+          await getApproxLocationByIP();
+
+        if (ipLoc) {
+          setWeatherCoords(ipLoc);
+          setWeatherLocation(null);
+        } else {
+          setWeatherCoords(null);
+          setWeatherLocation(
+            "Greater Noida"
+          );
+        }
+
+        setShowWeather(true);
+      }
 
       return;
     }
@@ -796,12 +860,12 @@ function App() {
 
   const startWakeWordDetection = () => {
     // Never listen while music player is open
-    if (showMusic) {
+    if (showMusicRef.current) {
       return;
     }
 
     // Never listen while weather is open
-    if (showWeather) {
+    if (showWeatherRef.current) {
       return;
     }
 
@@ -842,9 +906,17 @@ function App() {
       );
     };
 
+    // Prevents interim (not-yet-final) speech results from
+    // re-triggering wake-word detection multiple times for the
+    // same utterance — this was spawning overlapping recognition
+    // instances that fought over the mic.
+    let wakeWordTriggered = false;
+
     recognition.onresult = (
       event
     ) => {
+      if (wakeWordTriggered) return;
+
       let transcript = "";
 
       for (
@@ -888,6 +960,14 @@ function App() {
           "ATLAS WAKE WORD DETECTED"
         );
 
+        wakeWordTriggered = true;
+
+        // Set this BEFORE stopping the recognizer so its onend
+        // handler (which fires async) doesn't race and spin up
+        // a second wake-word listener while we're about to open
+        // the question listener.
+        isProcessingRef.current = true;
+
         recognition.stop();
 
         wakeWordRecognitionRef.current =
@@ -927,8 +1007,8 @@ function App() {
 
       if (
         !isProcessingRef.current &&
-        !showMusic &&
-        !showWeather
+        !showMusicRef.current &&
+        !showWeatherRef.current
       ) {
         setTimeout(() => {
           startWakeWordDetection();
@@ -942,8 +1022,8 @@ function App() {
 
       if (
         !isProcessingRef.current &&
-        !showMusic &&
-        !showWeather
+        !showMusicRef.current &&
+        !showWeatherRef.current
       ) {
         setTimeout(() => {
           startWakeWordDetection();
@@ -1205,6 +1285,7 @@ function App() {
       {showWeather && (
         <WeatherDialog
           location={weatherLocation}
+          coords={weatherCoords}
           onClose={() => {
             setShowWeather(false);
 

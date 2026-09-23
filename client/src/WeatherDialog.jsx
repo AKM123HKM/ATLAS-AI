@@ -1,26 +1,63 @@
 import { useEffect, useState } from "react";
 import "./WeatherDialog.css";
 
-export default function WeatherDialog({ onClose, locationQuery = "" }) {
-  const [city, setCity] = useState(locationQuery || "Greater Noida");
+export default function WeatherDialog({ onClose, location = "", coords = null }) {
+  const [city, setCity] = useState(location || "Greater Noida");
+  const [activeCoords, setActiveCoords] = useState(coords);
   const [searchInput, setSearchInput] = useState("");
   const [weatherData, setWeatherData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch weather when city changes or component mounts
   useEffect(() => {
-    if (city) {
+    if (activeCoords) {
+      fetchWeatherByCoords(activeCoords.lat, activeCoords.lon);
+    } else if (city) {
       fetchWeatherData(city);
     }
-  }, [city]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [city, activeCoords]);
+
+  const fetchWeatherByCoords = async (lat, lon) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const weatherRes = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`
+      );
+      const data = await weatherRes.json();
+
+      let placeName = "Your Location";
+      let countryName = "";
+      try {
+        const geoRes = await fetch(
+          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
+        );
+        const geoData = await geoRes.json();
+        placeName = geoData.city || geoData.locality || placeName;
+        countryName = geoData.countryName || "";
+      } catch {
+        // reverse geocode failed — keep generic name, weather data still shows
+      }
+
+      setWeatherData({
+        city: placeName,
+        country: countryName,
+        current: data.current,
+        daily: data.daily,
+        hourly: data.hourly,
+      });
+    } catch (err) {
+      setError(err.message || "Failed to load weather");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchWeatherData = async (targetCity) => {
     setLoading(true);
     setError(null);
-
     try {
-      // Step 1: Geocoding via Open-Meteo (No API key needed)
       const geoRes = await fetch(
         `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
           targetCity
@@ -34,7 +71,6 @@ export default function WeatherDialog({ onClose, locationQuery = "" }) {
 
       const { latitude, longitude, name, country } = geoData.results[0];
 
-      // Step 2: Weather Data Fetching
       const weatherRes = await fetch(
         `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`
       );
@@ -57,12 +93,12 @@ export default function WeatherDialog({ onClose, locationQuery = "" }) {
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchInput.trim()) {
+      setActiveCoords(null);
       setCity(searchInput.trim());
       setSearchInput("");
     }
   };
 
-  // Helper to resolve WMO Weather Interpretation Codes
   const getWeatherInfo = (code) => {
     const codes = {
       0: { label: "Clear Sky", icon: "☀️" },
@@ -83,7 +119,6 @@ export default function WeatherDialog({ onClose, locationQuery = "" }) {
   return (
     <div className="weather-overlay">
       <div className="weather-window">
-        {/* Header */}
         <div className="weather-header">
           <div>
             <span className="weather-label">A.T.L.A.S CLIMATE CORE</span>
@@ -94,7 +129,6 @@ export default function WeatherDialog({ onClose, locationQuery = "" }) {
           </button>
         </div>
 
-        {/* Search Bar */}
         <form className="weather-search" onSubmit={handleSearch}>
           <input
             type="text"
@@ -105,7 +139,6 @@ export default function WeatherDialog({ onClose, locationQuery = "" }) {
           <button type="submit">SEARCH</button>
         </form>
 
-        {/* Body */}
         <div className="weather-body">
           {loading ? (
             <div className="weather-loading">
@@ -119,7 +152,6 @@ export default function WeatherDialog({ onClose, locationQuery = "" }) {
           ) : (
             weatherData && (
               <>
-                {/* Hero Section */}
                 <div className="weather-hero">
                   <div className="hero-left">
                     <span className="weather-icon">
@@ -127,7 +159,8 @@ export default function WeatherDialog({ onClose, locationQuery = "" }) {
                     </span>
                     <div>
                       <h3>
-                        {weatherData.city}, {weatherData.country}
+                        {weatherData.city}
+                        {weatherData.country ? `, ${weatherData.country}` : ""}
                       </h3>
                       <p className="weather-desc">
                         {getWeatherInfo(weatherData.current.weather_code).label}
@@ -145,7 +178,6 @@ export default function WeatherDialog({ onClose, locationQuery = "" }) {
                   </div>
                 </div>
 
-                {/* Metric Grid */}
                 <div className="weather-grid">
                   <div className="metric-card">
                     <span className="metric-label">HUMIDITY</span>
@@ -167,7 +199,6 @@ export default function WeatherDialog({ onClose, locationQuery = "" }) {
                   </div>
                 </div>
 
-                {/* 5-Day Forecast */}
                 <div className="forecast-section">
                   <div className="forecast-title">5-DAY FORECAST</div>
                   <div className="forecast-list">
@@ -194,7 +225,6 @@ export default function WeatherDialog({ onClose, locationQuery = "" }) {
           )}
         </div>
 
-        {/* Footer */}
         <div className="weather-footer">
           <span>OPEN-METEO ENGINE</span>
           <span>LIVE METRICS</span>

@@ -138,6 +138,68 @@ async function fetchNewsHeadlines(question) {
 }
 
 // -------------------------------------
+// MUSIC SEARCH (YouTube Data API — key stays server-side)
+// -------------------------------------
+
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
+
+app.get("/api/music/search", async (req, res) => {
+  try {
+    const q = req.query.q;
+
+    if (!q || !q.trim()) {
+      return res
+        .status(400)
+        .json({ error: "No search query provided" });
+    }
+
+    if (!YOUTUBE_API_KEY) {
+      return res.status(503).json({
+        error:
+          "Online music search is not configured on the server.",
+      });
+    }
+
+    const searchUrl =
+      "https://www.googleapis.com/youtube/v3/search" +
+      "?part=snippet&type=video&videoCategoryId=10&maxResults=8" +
+      `&q=${encodeURIComponent(q)}` +
+      `&key=${YOUTUBE_API_KEY}`;
+
+    const ytRes = await fetch(searchUrl);
+    const ytData = await ytRes.json();
+
+    if (!ytRes.ok) {
+      console.error("YOUTUBE SEARCH ERROR:", ytData);
+
+      return res
+        .status(502)
+        .json({ error: "YouTube search failed" });
+    }
+
+    const results = (ytData.items || [])
+      .filter((item) => item?.id?.videoId)
+      .map((item) => ({
+        videoId: item.id.videoId,
+        title: item.snippet.title,
+        channel: item.snippet.channelTitle,
+        thumbnail:
+          item.snippet.thumbnails?.medium?.url ||
+          item.snippet.thumbnails?.default?.url ||
+          "",
+      }));
+
+    res.json({ results });
+  } catch (error) {
+    console.error("MUSIC SEARCH ERROR:", error);
+
+    res
+      .status(500)
+      .json({ error: "Music search failed" });
+  }
+});
+
+// -------------------------------------
 // LLM CALL (with model fallback)
 // -------------------------------------
 
