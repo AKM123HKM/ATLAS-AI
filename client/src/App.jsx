@@ -4,6 +4,8 @@ import "./Results.css";
 import "./FuturisticHud.css";
 import MusicPlayer from "./MusicPlayer";
 import WeatherDialog from "./WeatherDialog";
+import MathDialog from "./MathDialog";
+import { solveMath, isMathQuestion } from "./mathEngine";
 
 // =========================================================
 // PARTICLE FIELD
@@ -144,6 +146,8 @@ function App() {
   // =========================================================
 
   const [showWeather, setShowWeather] = useState(false);
+  const [showMath, setShowMath] = useState(false);
+  const [mathResult, setMathResult] = useState(null);
   const [weatherLocation, setWeatherLocation] =
     useState("Greater Noida");
   const [weatherCoords, setWeatherCoords] = useState(null);
@@ -333,16 +337,17 @@ function App() {
       q === "hi" ||
       q === "hey" ||
       q === "hello atlas" ||
-      q === "hey atlas"
+      q === "hey atlas" ||
+      q === "atlas"
     ) {
       return {
         title: "ATLAS",
 
         answer:
-          "Hello. I am A.T.L.A.S 3K. How can I assist you?",
+          "Hello",
 
         paragraphs: [
-          "Hello. I am A.T.L.A.S 3K.",
+          "Hello",
           "How can I assist you?",
         ],
 
@@ -432,6 +437,68 @@ function App() {
     );
 
     return true;
+  };
+
+  // =========================================================
+  // LOCAL MATH CORE — ZERO AI/API REQUESTS
+  // =========================================================
+
+  const handleMathCommand = (question) => {
+    // Never let a detected math request fall through to the AI API.
+    if (!isMathQuestion(question)) {
+      return false;
+    }
+
+    try {
+      console.log("ATLAS: LOCAL MATH ENGINE → MathJS");
+      const result = solveMath(question);
+      setMathResult(result);
+      setShowMath(true);
+      setUserText(question);
+      setAiText("");
+      setResult(null);
+      setShowResults(false);
+      setStatus("MATH CORE ACTIVE");
+      isProcessingRef.current = true;
+
+      const spoken = result.type === "calculation"
+        ? `The answer is ${result.value}.`
+        : result.type === "equation"
+          ? (result.solutions?.length
+              ? `The solution is ${result.solutions.map((v) => `${result.variable} equals ${v}`).join(" and ")}.`
+              : "I could not find a real solution in my numerical range.")
+          : result.type === "derivative"
+            ? `The derivative is ${result.derivative}.`
+            : result.type === "integral"
+              ? `The integral result is ${result.value != null ? result.value : result.antiderivative}.`
+              : result.type === "conversion"
+                ? `The converted value is ${result.result} ${result.to}.`
+                : "The mathematical analysis is complete.";
+      setTimeout(() => speak(spoken), 80);
+
+      return true;
+    } catch (error) {
+      console.error("ATLAS MATH ERROR:", error);
+      // IMPORTANT: once a request is classified as math, NEVER fall through
+      // to askAtlas()/OpenRouter. Show the local engine error instead.
+      setMathResult({
+        type: "calculation",
+        title: "MATH CORE ERROR",
+        expression: question,
+        value: null,
+        error: error?.message || "Unable to solve this expression locally.",
+        engine: "MathJS LOCAL ENGINE",
+      });
+      setShowMath(true);
+      setUserText(question);
+      setAiText("");
+      setResult(null);
+      setShowResults(false);
+      setStatus("MATH CORE — LOCAL ONLY");
+      isProcessingRef.current = true;
+      setTimeout(() => speak("I could not solve that locally. No AI request was sent."), 80);
+      return true;
+    }
   };
 
   // =========================================================
@@ -628,6 +695,11 @@ function App() {
         return;
       }
 
+      // Do not restart wake-word detection while math is open.
+      if (showMath) {
+        return;
+      }
+
       isProcessingRef.current = false;
 
       setStatus(
@@ -696,6 +768,12 @@ function App() {
 
     const lowerQuestion =
       question.toLowerCase().trim();
+
+    // Math is handled entirely locally. It must run before weather/music/LLM
+    // so calculations never consume an AI request.
+    if (handleMathCommand(question)) {
+      return;
+    }
 
     if (
       lowerQuestion.includes("weather") ||
@@ -869,6 +947,11 @@ function App() {
       return;
     }
 
+    // Never listen while the local math core is open
+    if (showMath) {
+      return;
+    }
+
     const SpeechRecognition =
       window.SpeechRecognition ||
       window.webkitSpeechRecognition;
@@ -944,6 +1027,12 @@ function App() {
           "hey atlas"
         ) ||
         transcript.includes(
+          "hello"
+        ) ||
+        transcript.includes(
+          "hello atlas"
+        ) ||
+        transcript.includes(
           "hey at last"
         ) ||
         transcript.includes(
@@ -951,6 +1040,9 @@ function App() {
         ) ||
         transcript.includes(
           "okay atlas"
+        ) ||
+        transcript.includes(
+          "okay at least"
         ) ||
         transcript.includes(
           "ok atlas"
@@ -1169,7 +1261,7 @@ function App() {
         setBooted(true);
 
         const greeting =
-          "Hello. I am ATLAS 3K. Advanced Technology and Learning Assistant System. I am online and ready.";
+          "Hello.";
 
         setAiText(greeting);
 
@@ -1296,6 +1388,22 @@ function App() {
               "WAITING FOR WAKE WORD"
             );
 
+            setTimeout(() => {
+              startWakeWordDetection();
+            }, 300);
+          }}
+        />
+      )}
+
+      {showMath && mathResult && (
+        <MathDialog
+          result={mathResult}
+          question={userText}
+          onClose={() => {
+            setShowMath(false);
+            setMathResult(null);
+            isProcessingRef.current = false;
+            setStatus("WAITING FOR WAKE WORD");
             setTimeout(() => {
               startWakeWordDetection();
             }, 300);
@@ -1631,7 +1739,9 @@ function App() {
                           ? "MUSIC"
                           : showWeather
                             ? "WEATHER"
-                            : "READY"}
+                            : showMath
+                              ? "MATH"
+                              : "READY"}
                   </b>
                 </div>
 
@@ -1730,7 +1840,7 @@ function App() {
               <div className="voice-hint">
                 {listening
                   ? "LISTENING..."
-                  : 'SAY "OK ATLAS"'}
+                  : 'SAY "OK ATLAS or Hello"'}
               </div>
             </section>
 
@@ -1773,7 +1883,9 @@ function App() {
                   ? "MUSIC SYSTEM ACTIVE"
                   : showWeather
                     ? "WEATHER SYSTEM ACTIVE"
-                    : "ALL SYSTEMS NOMINAL"}
+                    : showMath
+                      ? "MATH CORE ACTIVE"
+                      : "ALL SYSTEMS NOMINAL"}
             </span>
           </footer>
         </>

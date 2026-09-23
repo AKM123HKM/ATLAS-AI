@@ -1,0 +1,197 @@
+.atlas-math-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(0, 220, 255, 0.08),
+      rgba(0, 0, 0, 0.88)
+    );
+
+  backdrop-filter: blur(12px);
+}
+
+.atlas-math-panel {
+  width: min(760px, 92vw);
+
+  padding: 28px;
+
+  border: 1px solid rgba(0, 220, 255, 0.45);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(5, 24, 35, 0.96),
+      rgba(3, 11, 19, 0.98)
+    );
+
+  box-shadow:
+    0 0 50px rgba(0, 200, 255, 0.12),
+    inset 0 0 40px rgba(0, 200, 255, 0.03);
+
+  color: #dffaff;
+
+  font-family:
+    "JetBrains Mono",
+    "Consolas",
+    monospace;
+}
+
+.atlas-math-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.atlas-math-eyebrow {
+  font-size: 10px;
+  letter-spacing: 3px;
+  opacity: 0.55;
+  margin-bottom: 8px;
+}
+
+.atlas-math-header h2 {
+  margin: 0;
+
+  font-size: 25px;
+  letter-spacing: 3px;
+}
+
+.atlas-math-close {
+  width: 34px;
+  height: 34px;
+
+  border: 1px solid rgba(0, 220, 255, 0.3);
+
+  background: transparent;
+
+  color: #dffaff;
+
+  font-size: 24px;
+
+  cursor: pointer;
+}
+
+.atlas-math-status {
+  margin-top: 18px;
+
+  padding: 9px 12px;
+
+  border: 1px solid rgba(0, 220, 255, 0.18);
+
+  font-size: 10px;
+
+  letter-spacing: 2px;
+
+  color: #80edff;
+}
+
+.atlas-math-dot {
+  display: inline-block;
+
+  width: 7px;
+  height: 7px;
+
+  margin-right: 8px;
+
+  border-radius: 50%;
+
+  background: #35eaff;
+
+  box-shadow:
+    0 0 12px #35eaff;
+}
+
+.atlas-math-expression {
+  margin-top: 25px;
+
+  padding: 20px;
+
+  border-left: 2px solid rgba(0, 220, 255, 0.6);
+
+  background: rgba(0, 220, 255, 0.035);
+}
+
+.atlas-math-expression span,
+.atlas-math-result span {
+  display: block;
+
+  margin-bottom: 9px;
+
+  font-size: 10px;
+
+  letter-spacing: 2px;
+
+  opacity: 0.5;
+}
+
+.atlas-math-expression strong {
+  font-size: 20px;
+}
+
+.atlas-math-result {
+  margin-top: 12px;
+
+  padding: 24px;
+
+  text-align: center;
+
+  border: 1px solid rgba(0, 220, 255, 0.25);
+
+  background: rgba(0, 220, 255, 0.06);
+}
+
+.atlas-math-result strong {
+  display: block;
+
+  font-size: 38px;
+
+  color: #8ff5ff;
+
+  text-shadow:
+    0 0 20px rgba(0, 220, 255, 0.45);
+}
+
+.atlas-math-steps {
+  margin-top: 24px;
+}
+
+.atlas-math-section-title {
+  margin-bottom: 12px;
+
+  font-size: 10px;
+
+  letter-spacing: 3px;
+
+  opacity: 0.5;
+}
+
+.atlas-math-step {
+  display: flex;
+  gap: 16px;
+
+  padding: 11px 0;
+
+  border-bottom:
+    1px solid rgba(255, 255, 255, 0.05);
+}
+
+.atlas-math-step span {
+  color: #58eaff;
+
+  font-size: 11px;
+}
+
+.atlas-math-step p {
+  margin: 0;
+
+  font-size: 13px;
+
+  line-height: 1.6;
+}
