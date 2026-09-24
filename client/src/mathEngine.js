@@ -1,11 +1,6 @@
 // ============================================================
 // A.T.L.A.S 3K — LOCAL MATH ENGINE
-// ============================================================
-// Requires:
-//   npm install mathjs
-//
-// App.jsx:
-//   import { solveMath, isMathQuestion } from "./mathEngine";
+
 //
 // IMPORTANT:
 //   This engine is completely local.
@@ -88,7 +83,13 @@ export function clean(input) {
     .replace(/π/g, "pi")
     .replace(/√/g, "sqrt")
     .replace(/²/g, "^2")
-    .replace(/³/g, "^3");
+    .replace(/³/g, "^3")
+    // FIX: the degree SYMBOL (°) is different from the word
+    // "degrees" — e.g. "sin 30°" from typed input. It was left
+    // untouched before, so it survived as a stray unparseable
+    // character. Convert it to the word so it flows through the
+    // same trig/unit logic used everywhere else in this file.
+    .replace(/(\d)\s*°/g, "$1 degrees");
 
   // ----------------------------------------------------------
   // ROOTS
@@ -1111,20 +1112,49 @@ function formatMathValue(value) {
 // TRIGONOMETRY
 // ============================================================
 
+// FIX: previously this only matched sin/sine/cos/cosine/tan/tangent,
+// so "cot", "sec", "csc"/"cosec" all silently fell through the whole
+// solveMath() pipeline and landed on the final "could not solve
+// locally" error. Longest-alternative-first so "cosecant" matches
+// before "cosec"/"cos", "secant" before "sec", "cotangent"/"cotan"
+// before "cot".
+const TRIG_ALTERNATION =
+  "sine|sin|cosecant|cosec|csc|cosine|cos|secant|sec|cotangent|cotan|cot|tangent|tan";
+
+const TRIG_FN_MAP = {
+  sine: "sin",
+  sin: "sin",
+  cosecant: "csc",
+  cosec: "csc",
+  csc: "csc",
+  cosine: "cos",
+  cos: "cos",
+  secant: "sec",
+  sec: "sec",
+  cotangent: "cot",
+  cotan: "cot",
+  cot: "cot",
+  tangent: "tan",
+  tan: "tan"
+};
+
 function solveTrig(input) {
   const text = input
     .toLowerCase()
     .trim();
 
   const match = text.match(
-    /\b(sine|sin|cosine|cos|tangent|tan)\s+(?:of\s+)?(-?\d+(?:\.\d+)?)\s*(degrees?|deg|radians?|rad)?/i
+    new RegExp(
+      `\\b(${TRIG_ALTERNATION})\\s+(?:of\\s+)?(-?\\d+(?:\\.\\d+)?)\\s*(degrees?|deg|radians?|rad)?`,
+      "i"
+    )
   );
 
   if (!match) {
     return null;
   }
 
-  const fn = match[1];
+  const fn = TRIG_FN_MAP[match[1].toLowerCase()];
   const angle = Number(match[2]);
   const unit = match[3] || "degrees";
 
@@ -1135,12 +1165,27 @@ function solveTrig(input) {
 
   let result;
 
-  if (/^sin|sine$/i.test(fn)) {
-    result = Math.sin(radians);
-  } else if (/^cos|cosine$/i.test(fn)) {
-    result = Math.cos(radians);
-  } else {
-    result = Math.tan(radians);
+  switch (fn) {
+    case "sin":
+      result = Math.sin(radians);
+      break;
+    case "cos":
+      result = Math.cos(radians);
+      break;
+    case "tan":
+      result = Math.tan(radians);
+      break;
+    case "csc":
+      result = 1 / Math.sin(radians);
+      break;
+    case "sec":
+      result = 1 / Math.cos(radians);
+      break;
+    case "cot":
+      result = 1 / Math.tan(radians);
+      break;
+    default:
+      return null;
   }
 
   if (
@@ -1156,6 +1201,7 @@ function solveTrig(input) {
     result: fmt(result),
     numericResult: result,
     steps: [
+      `Function: ${fn}`,
       `Angle = ${fmt(angle)} ${unit}`,
       `Radians = ${fmt(radians)}`,
       `Result = ${fmt(result)}`
@@ -2304,11 +2350,20 @@ export function isMathQuestion(input) {
   }
 
   // Trigonometry
+  // FIX: previously only sin/sine/cos/cosine/tan/tangent were
+  // recognized here, so questions like "cot 60" or "sec of 45"
+  // never even got flagged as math at all.
   if (
-    /\b(sin|sine|cos|cosine|tan|tangent)\b/i.test(
+    /\b(sin|sine|cos|cosine|tan|tangent|sec|secant|csc|cosec|cosecant|cot|cotan|cotangent)\b/i.test(
       text
     )
   ) {
+    return true;
+  }
+
+  // Degree symbol / word — often the only math signal on a bare
+  // trig question with no other keyword.
+  if (/\bdegrees?\b/i.test(text) || /°/.test(text)) {
     return true;
   }
 

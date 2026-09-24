@@ -1,269 +1,1542 @@
 /* =========================================================
    A.T.L.A.S 3K — FUTURISTIC HUD
-   Decorative layer system
-========================================================= */
+   JARVIS / TACTICAL INTERFACE
+   ========================================================= */
+
+:root {
+  --atlas-cyan: #4de8ff;
+  --atlas-cyan-soft: rgba(77, 232, 255, 0.55);
+  --atlas-cyan-faint: rgba(77, 232, 255, 0.12);
+  --atlas-blue: #6fa8ff;
+
+  --hud-bg: rgba(3, 10, 18, 0.72);
+  --hud-bg-deep: rgba(1, 7, 13, 0.88);
+
+  --hud-border: rgba(77, 232, 255, 0.28);
+  --hud-border-bright: rgba(77, 232, 255, 0.65);
+
+  --hud-text: #d9faff;
+  --hud-text-soft: rgba(217, 250, 255, 0.65);
+  --hud-text-dim: rgba(217, 250, 255, 0.38);
+
+  --hud-shadow:
+    0 0 30px rgba(77, 232, 255, 0.05),
+    inset 0 0 30px rgba(77, 232, 255, 0.025);
+}
+
+
+/* =========================================================
+   GLOBAL HUD LAYER
+   ========================================================= */
+
+.app {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+
+  color: var(--hud-text);
+
+  background:
+    radial-gradient(
+      circle at 50% 45%,
+      rgba(22, 91, 116, 0.1),
+      transparent 38%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(0, 120, 180, 0.035),
+      transparent 60%
+    ),
+    #01060b;
+}
+
+
+/* subtle technical grid */
+
+.app::before {
+  content: "";
+
+  position: fixed;
+  inset: 0;
+
+  pointer-events: none;
+
+  background-image:
+    linear-gradient(
+      rgba(77, 232, 255, 0.025) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(77, 232, 255, 0.025) 1px,
+      transparent 1px
+    );
+
+  background-size: 42px 42px;
+
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black 15%,
+    black 85%,
+    transparent
+  );
+
+  opacity: 0.45;
+
+  z-index: 0;
+}
 
 
 /* =========================================================
    PARTICLE FIELD
-========================================================= */
+   ========================================================= */
 
 .particle-field {
   position: fixed;
   inset: 0;
 
-  width: 100vw;
-  height: 100vh;
+  pointer-events: none;
 
   z-index: 0;
 
-  pointer-events: none;
+  overflow: hidden;
 }
 
 
 /* =========================================================
-   APPLICATION LAYER
-========================================================= */
+   TOP BAR
+   ========================================================= */
 
-.app,
-.boot-screen {
+.topbar {
   position: relative;
+  z-index: 5;
 
+  height: 74px;
   width: 100%;
-  min-height: 100vh;
 
-  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 
-  z-index: 1;
+  padding: 0 34px;
+
+  box-sizing: border-box;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(2, 11, 19, 0.92),
+      rgba(2, 9, 15, 0.68)
+    );
+
+  border-bottom: 1px solid rgba(77, 232, 255, 0.18);
+
+  box-shadow:
+    0 8px 35px rgba(0, 0, 0, 0.25),
+    inset 0 -1px 0 rgba(77, 232, 255, 0.04);
+
+  backdrop-filter: blur(14px);
 }
 
 
-/*
-   IMPORTANT:
-   Do NOT use .app > * here.
-   The particle canvas is also a child of .app.
-*/
+.topbar::after {
+  content: "";
 
+  position: absolute;
 
-/* =========================================================
-   ACTUAL UI LAYERS
-========================================================= */
+  left: 34px;
+  right: 34px;
+  bottom: -1px;
 
-.topbar,
-.dashboard,
-.results-page,
-footer {
-  position: relative;
-  z-index: 2;
-}
+  height: 1px;
 
-
-/* =========================================================
-   HUD CORNER BRACKETS
-========================================================= */
-
-.hud-corner {
-  position: fixed;
-
-  width: 46px;
-  height: 46px;
-
-  z-index: 10;
-
-  pointer-events: none;
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(77, 232, 255, 0.55),
+      transparent
+    );
 
   opacity: 0.55;
 }
 
 
-/* Corner glow lines */
+/* =========================================================
+   HUD BRAND
+   ========================================================= */
 
-.hud-corner::before,
-.hud-corner::after {
+.brand,
+.logo,
+.topbar-brand {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  letter-spacing: 0.22em;
+
+  color: #e9fdff;
+
+  text-shadow:
+    0 0 12px rgba(77, 232, 255, 0.35);
+}
+
+
+.brand::before,
+.logo::before,
+.topbar-brand::before {
+  content: "";
+
+  width: 7px;
+  height: 7px;
+
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: var(--atlas-cyan);
+
+  box-shadow:
+    0 0 8px var(--atlas-cyan),
+    0 0 18px rgba(77, 232, 255, 0.55);
+
+  animation: atlasPulse 2.2s ease-in-out infinite;
+}
+
+
+/* =========================================================
+   SYSTEM STATUS
+   ========================================================= */
+
+.system-status,
+.status,
+.topbar-status {
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+
+  font-size: 10px;
+  font-weight: 600;
+
+  letter-spacing: 0.16em;
+
+  text-transform: uppercase;
+
+  color: var(--hud-text-soft);
+}
+
+
+.system-status::before,
+.status::before,
+.topbar-status::before {
+  content: "";
+
+  width: 6px;
+  height: 6px;
+
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: #55f5b0;
+
+  box-shadow:
+    0 0 7px rgba(85, 245, 176, 0.8),
+    0 0 16px rgba(85, 245, 176, 0.35);
+
+  animation: statusPulse 1.8s ease-in-out infinite;
+}
+
+
+/* =========================================================
+   MAIN DASHBOARD
+   ========================================================= */
+
+.dashboard {
+  position: relative;
+
+  z-index: 2;
+
+  width: 100%;
+
+  min-height: calc(100vh - 128px);
+
+  box-sizing: border-box;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(220px, 0.78fr)
+    minmax(420px, 1.7fr)
+    minmax(220px, 0.78fr);
+
+  align-items: center;
+
+  gap: 26px;
+
+  padding: 30px 34px 34px;
+}
+
+
+/* =========================================================
+   HUD PANELS
+   ========================================================= */
+
+.hud-panel {
+  position: relative;
+
+  min-width: 0;
+
+  padding: 22px;
+
+  box-sizing: border-box;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(8, 23, 34, 0.76),
+      rgba(2, 10, 17, 0.64)
+    );
+
+  border: 1px solid var(--hud-border);
+
+  box-shadow:
+    var(--hud-shadow),
+    0 12px 40px rgba(0, 0, 0, 0.28);
+
+  backdrop-filter: blur(14px);
+
+  clip-path: polygon(
+    13px 0,
+    calc(100% - 13px) 0,
+    100% 13px,
+    100% calc(100% - 13px),
+    calc(100% - 13px) 100%,
+    13px 100%,
+    0 calc(100% - 13px),
+    0 13px
+  );
+
+  transition:
+    border-color 0.35s ease,
+    box-shadow 0.35s ease,
+    background 0.35s ease;
+}
+
+
+.hud-panel:hover {
+  border-color: var(--hud-border-bright);
+
+  box-shadow:
+    0 0 35px rgba(77, 232, 255, 0.07),
+    inset 0 0 30px rgba(77, 232, 255, 0.035);
+}
+
+
+.hud-panel::before,
+.hud-panel::after {
   content: "";
 
   position: absolute;
 
-  background: #43eaff;
-
-  box-shadow:
-    0 0 6px rgba(67, 234, 255, 0.8),
-    0 0 14px rgba(67, 234, 255, 0.35);
-}
-
-
-/* Horizontal */
-
-.hud-corner::before {
-  width: 100%;
-  height: 2px;
-}
-
-
-/* Vertical */
-
-.hud-corner::after {
-  width: 2px;
-  height: 100%;
-}
-
-
-/* =========================================================
-   TOP LEFT
-========================================================= */
-
-.hud-corner-tl {
-  top: 14px;
-  left: 14px;
-}
-
-.hud-corner-tl::before,
-.hud-corner-tl::after {
-  top: 0;
-  left: 0;
-}
-
-
-/* =========================================================
-   TOP RIGHT
-========================================================= */
-
-.hud-corner-tr {
-  top: 14px;
-  right: 14px;
-}
-
-.hud-corner-tr::before,
-.hud-corner-tr::after {
-  top: 0;
-  right: 0;
-}
-
-
-/* =========================================================
-   BOTTOM LEFT
-========================================================= */
-
-.hud-corner-bl {
-  bottom: 14px;
-  left: 14px;
-}
-
-.hud-corner-bl::before,
-.hud-corner-bl::after {
-  bottom: 0;
-  left: 0;
-}
-
-
-/* =========================================================
-   BOTTOM RIGHT
-========================================================= */
-
-.hud-corner-br {
-  bottom: 14px;
-  right: 14px;
-}
-
-.hud-corner-br::before,
-.hud-corner-br::after {
-  bottom: 0;
-  right: 0;
-}
-
-
-/* =========================================================
-   SCANLINE OVERLAY
-========================================================= */
-
-.hud-scanlines {
-  position: fixed;
-
-  inset: 0;
-
-  z-index: 9;
+  width: 18px;
+  height: 18px;
 
   pointer-events: none;
+}
+
+
+.hud-panel::before {
+  left: -1px;
+  top: -1px;
+
+  border-left: 2px solid var(--atlas-cyan);
+  border-top: 2px solid var(--atlas-cyan);
+}
+
+
+.hud-panel::after {
+  right: -1px;
+  bottom: -1px;
+
+  border-right: 2px solid var(--atlas-cyan);
+  border-bottom: 2px solid var(--atlas-cyan);
+}
+
+
+/* =========================================================
+   LEFT / RIGHT PANELS
+   ========================================================= */
+
+.left-panel,
+.right-panel {
+  position: relative;
+
+  display: flex;
+  flex-direction: column;
+
+  justify-content: center;
+
+  min-height: 360px;
+}
+
+
+/* =========================================================
+   PANEL HEADER
+   ========================================================= */
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 22px;
+
+  padding-bottom: 12px;
+
+  border-bottom: 1px solid rgba(77, 232, 255, 0.13);
+}
+
+
+.panel-title {
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.22em;
+
+  text-transform: uppercase;
+
+  color: var(--atlas-cyan);
+
+  text-shadow:
+    0 0 12px rgba(77, 232, 255, 0.25);
+}
+
+
+.panel-code {
+  font-family: monospace;
+
+  font-size: 9px;
+
+  letter-spacing: 0.12em;
+
+  color: var(--hud-text-dim);
+}
+
+
+/* =========================================================
+   SYSTEM INFORMATION
+   ========================================================= */
+
+.system-info {
+  display: flex;
+  flex-direction: column;
+
+  gap: 13px;
+}
+
+
+.system-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  min-height: 28px;
+
+  font-size: 10px;
+
+  letter-spacing: 0.1em;
+}
+
+
+.system-row-label {
+  color: var(--hud-text-dim);
+
+  text-transform: uppercase;
+}
+
+
+.system-row-value {
+  color: var(--hud-text-soft);
+
+  font-family: monospace;
+
+  font-size: 10px;
+
+  text-align: right;
+}
+
+
+.system-row-value.active {
+  color: var(--atlas-cyan);
+
+  text-shadow:
+    0 0 10px rgba(77, 232, 255, 0.25);
+}
+
+
+/* =========================================================
+   DATA BARS
+   ========================================================= */
+
+.data-bar {
+  position: relative;
+
+  width: 100%;
+  height: 2px;
+
+  margin-top: 5px;
+
+  overflow: hidden;
+
+  background: rgba(77, 232, 255, 0.08);
+}
+
+
+.data-bar::after {
+  content: "";
+
+  position: absolute;
+
+  left: 0;
+  top: 0;
+  bottom: 0;
+
+  width: 64%;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(77, 232, 255, 0.25),
+      var(--atlas-cyan)
+    );
+
+  box-shadow:
+    0 0 8px rgba(77, 232, 255, 0.4);
+
+  animation: dataScan 3.2s ease-in-out infinite;
+}
+
+
+/* =========================================================
+   CENTER GLOBE AREA
+   ========================================================= */
+
+.dashboard-center {
+  position: relative;
+
+  width: 100%;
+  height: 100%;
+
+  min-height: 560px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: visible;
+
+  isolation: isolate;
+}
+
+
+/*
+   IMPORTANT:
+   AtlasGlobe renders a Three.js canvas.
+   Keep it above decorative UI layers.
+*/
+
+.dashboard-center > * {
+  position: relative;
+
+  z-index: 3;
+}
+
+
+.dashboard-center canvas {
+  position: relative !important;
+
+  z-index: 4 !important;
+
+  display: block;
+
+  width: 100% !important;
+  height: 100% !important;
+
+  pointer-events: auto;
+}
+
+
+/* =========================================================
+   VOICE STATUS
+   ========================================================= */
+
+.voice-status {
+  position: absolute;
+
+  left: 50%;
+
+  top: calc(50% + 205px);
+
+  transform: translateX(-50%);
+
+  z-index: 5;
+
+  white-space: nowrap;
+
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 7px 14px;
+
+  background: rgba(2, 12, 20, 0.72);
+
+  border: 1px solid rgba(77, 232, 255, 0.22);
+
+  clip-path: polygon(
+    7px 0,
+    calc(100% - 7px) 0,
+    100% 7px,
+    100% calc(100% - 7px),
+    calc(100% - 7px) 100%,
+    7px 100%,
+    0 calc(100% - 7px),
+    0 7px
+  );
+
+  color: var(--atlas-cyan);
+
+  font-size: 9px;
+  font-weight: 700;
+
+  letter-spacing: 0.2em;
+
+  text-transform: uppercase;
+
+  backdrop-filter: blur(10px);
+
+  text-shadow:
+    0 0 10px rgba(77, 232, 255, 0.3);
+}
+
+
+.voice-status::before {
+  content: "";
+
+  width: 5px;
+  height: 5px;
+
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: currentColor;
+
+  box-shadow:
+    0 0 9px currentColor;
+
+  animation: statusPulse 1s ease-in-out infinite;
+}
+
+
+/* =========================================================
+   USER SUBTITLE
+   ========================================================= */
+
+.user-subtitle {
+  position: absolute;
+
+  left: 50%;
+  bottom: 76px;
+
+  transform: translateX(-50%);
+
+  width: min(90%, 460px);
+
+  text-align: center;
+
+  color: var(--hud-text-soft);
+
+  font-size: 11px;
+
+  letter-spacing: 0.08em;
+
+  line-height: 1.7;
+
+  opacity: 0.8;
+
+  z-index: 6;
+
+  pointer-events: none;
+}
+
+
+/* =========================================================
+   MICROPHONE BUTTON
+   ========================================================= */
+
+.mic-button {
+  position: absolute;
+
+  left: 50%;
+  bottom: 18px;
+
+  transform: translateX(-50%);
+
+  z-index: 10;
+
+  width: 58px;
+  height: 58px;
+
+  border-radius: 50%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+
+  color: var(--atlas-cyan);
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(77, 232, 255, 0.12),
+      rgba(2, 10, 17, 0.9)
+    );
+
+  border: 1px solid rgba(77, 232, 255, 0.48);
+
+  box-shadow:
+    0 0 18px rgba(77, 232, 255, 0.09),
+    inset 0 0 15px rgba(77, 232, 255, 0.06);
+
+  transition:
+    transform 0.2s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+
+.mic-button:hover {
+  transform: translateX(-50%) scale(1.06);
+
+  border-color: var(--atlas-cyan);
+
+  box-shadow:
+    0 0 25px rgba(77, 232, 255, 0.18),
+    inset 0 0 20px rgba(77, 232, 255, 0.08);
+}
+
+
+.mic-button:active {
+  transform: translateX(-50%) scale(0.96);
+}
+
+
+.mic-button.listening {
+  border-color: var(--atlas-cyan);
+
+  box-shadow:
+    0 0 25px rgba(77, 232, 255, 0.28),
+    0 0 55px rgba(77, 232, 255, 0.09),
+    inset 0 0 20px rgba(77, 232, 255, 0.1);
+
+  animation: micListening 1.4s ease-in-out infinite;
+}
+
+
+/* =========================================================
+   VOICE HINT
+   ========================================================= */
+
+.voice-hint {
+  position: absolute;
+
+  left: 50%;
+  bottom: -8px;
+
+  transform: translateX(-50%);
+
+  white-space: nowrap;
+
+  color: var(--hud-text-dim);
+
+  font-size: 8px;
+
+  letter-spacing: 0.18em;
+
+  text-transform: uppercase;
+
+  z-index: 6;
+}
+
+
+/* =========================================================
+   INTELLIGENCE OUTPUT
+   ========================================================= */
+
+.intelligence-output {
+  display: flex;
+  flex-direction: column;
+
+  min-height: 210px;
+
+  gap: 18px;
+}
+
+
+.output-state {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  color: var(--atlas-cyan);
+
+  font-size: 9px;
+  font-weight: 700;
+
+  letter-spacing: 0.18em;
+
+  text-transform: uppercase;
+}
+
+
+.output-state::before {
+  content: "";
+
+  width: 6px;
+  height: 6px;
+
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: currentColor;
+
+  box-shadow:
+    0 0 10px currentColor;
+
+  animation: statusPulse 1.5s ease-in-out infinite;
+}
+
+
+.output-text {
+  color: var(--hud-text-soft);
+
+  font-size: 12px;
+
+  line-height: 1.8;
+
+  letter-spacing: 0.03em;
+}
+
+
+.output-text strong {
+  color: var(--hud-text);
+
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   PROCESSING DATA STREAM
+   ========================================================= */
+
+.processing-stream {
+  position: relative;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 7px;
+
+  margin-top: auto;
+
+  font-family: monospace;
+
+  font-size: 8px;
+
+  letter-spacing: 0.08em;
+
+  color: var(--hud-text-dim);
+
+  overflow: hidden;
+}
+
+
+.processing-stream span {
+  display: block;
+
+  opacity: 0;
+
+  animation: streamAppear 2.8s linear infinite;
+}
+
+
+.processing-stream span:nth-child(2) {
+  animation-delay: 0.45s;
+}
+
+
+.processing-stream span:nth-child(3) {
+  animation-delay: 0.9s;
+}
+
+
+.processing-stream span:nth-child(4) {
+  animation-delay: 1.35s;
+}
+
+
+/* =========================================================
+   FOOTER
+   ========================================================= */
+
+footer {
+  position: relative;
+
+  z-index: 5;
+
+  height: 54px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0 30px;
+
+  box-sizing: border-box;
+
+  border-top: 1px solid rgba(77, 232, 255, 0.12);
+
+  background:
+    linear-gradient(
+      0deg,
+      rgba(1, 7, 13, 0.9),
+      rgba(2, 9, 15, 0.62)
+    );
+
+  color: var(--hud-text-dim);
+
+  font-size: 8px;
+
+  letter-spacing: 0.2em;
+
+  text-transform: uppercase;
+
+  backdrop-filter: blur(12px);
+}
+
+
+footer::before {
+  content: "";
+
+  position: absolute;
+
+  left: 20%;
+  right: 20%;
+
+  top: -1px;
+
+  height: 1px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(77, 232, 255, 0.35),
+      transparent
+    );
+}
+
+
+/* =========================================================
+   HUD CORNER BRACKETS
+   ========================================================= */
+
+.hud-corner {
+  position: absolute;
+
+  width: 30px;
+  height: 30px;
+
+  pointer-events: none;
+
+  opacity: 0.75;
+}
+
+
+.hud-corner.top-left {
+  top: 22px;
+  left: 22px;
+
+  border-left: 1px solid var(--atlas-cyan);
+  border-top: 1px solid var(--atlas-cyan);
+}
+
+
+.hud-corner.top-right {
+  top: 22px;
+  right: 22px;
+
+  border-right: 1px solid var(--atlas-cyan);
+  border-top: 1px solid var(--atlas-cyan);
+}
+
+
+.hud-corner.bottom-left {
+  bottom: 22px;
+  left: 22px;
+
+  border-left: 1px solid var(--atlas-cyan);
+  border-bottom: 1px solid var(--atlas-cyan);
+}
+
+
+.hud-corner.bottom-right {
+  bottom: 22px;
+  right: 22px;
+
+  border-right: 1px solid var(--atlas-cyan);
+  border-bottom: 1px solid var(--atlas-cyan);
+}
+
+
+/* =========================================================
+   SCANLINE
+   ========================================================= */
+
+.app::after {
+  content: "";
+
+  position: fixed;
+  inset: 0;
+
+  pointer-events: none;
+
+  z-index: 20;
 
   background:
     repeating-linear-gradient(
       to bottom,
-      rgba(67, 234, 255, 0.018) 0px,
-      rgba(67, 234, 255, 0.018) 1px,
-      transparent 1px,
-      transparent 4px
+      transparent 0px,
+      transparent 4px,
+      rgba(77, 232, 255, 0.012) 5px
     );
 
-  mix-blend-mode: screen;
+  opacity: 0.45;
 }
 
 
 /* =========================================================
-   RADAR SWEEP
-========================================================= */
+   RESULTS PAGE
+   ========================================================= */
 
-.radar-sweep {
-  position: absolute;
+.results-page {
+  position: relative;
 
-  width: 520px;
-  height: 520px;
+  z-index: 2;
 
-  border-radius: 50%;
+  min-height: calc(100vh - 74px);
 
-  border: 1px solid rgba(67, 234, 255, 0.15);
+  padding: 34px;
+
+  box-sizing: border-box;
+
+  overflow-y: auto;
 
   background:
-    conic-gradient(
-      from 0deg,
-      rgba(67, 234, 255, 0.18),
-      transparent 25%,
-      transparent 100%
+    radial-gradient(
+      circle at 50% 30%,
+      rgba(77, 232, 255, 0.04),
+      transparent 45%
     );
-
-  animation: radarSpin 4s linear infinite;
-
-  pointer-events: none;
-
-  z-index: 0;
 }
 
 
-/* Radar inner rings */
+.results-page > * {
+  position: relative;
+}
 
-.radar-sweep::before,
-.radar-sweep::after {
+
+/* =========================================================
+   BOOT SCREEN
+   ========================================================= */
+
+.boot-screen {
+  position: relative;
+
+  min-height: 100vh;
+  width: 100%;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(10, 67, 85, 0.12),
+      transparent 40%
+    ),
+    #01060b;
+}
+
+
+.boot-screen::before {
   content: "";
 
   position: absolute;
+  inset: 0;
 
-  border-radius: 50%;
+  background-image:
+    linear-gradient(
+      rgba(77, 232, 255, 0.025) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(77, 232, 255, 0.025) 1px,
+      transparent 1px
+    );
 
-  border: 1px solid rgba(67, 234, 255, 0.08);
-}
+  background-size: 45px 45px;
 
-
-/* Inner ring */
-
-.radar-sweep::before {
-  inset: 60px;
-}
-
-
-/* Inner-most ring */
-
-.radar-sweep::after {
-  inset: 130px;
+  pointer-events: none;
 }
 
 
 /* =========================================================
-   RADAR ANIMATION
-========================================================= */
+   BOOT LOGO
+   ========================================================= */
 
-@keyframes radarSpin {
+.boot-logo {
+  position: relative;
+
+  z-index: 2;
+
+  color: var(--atlas-cyan);
+
+  font-size: clamp(42px, 7vw, 88px);
+
+  font-weight: 200;
+
+  letter-spacing: 0.22em;
+
+  text-shadow:
+    0 0 20px rgba(77, 232, 255, 0.3),
+    0 0 60px rgba(77, 232, 255, 0.1);
+
+  animation: bootLogoIn 1.8s ease forwards;
+}
+
+
+.boot-title {
+  position: relative;
+
+  z-index: 2;
+
+  margin-top: 16px;
+
+  color: var(--hud-text);
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  letter-spacing: 0.42em;
+
+  text-transform: uppercase;
+
+  opacity: 0.8;
+}
+
+
+.boot-status {
+  position: relative;
+
+  z-index: 2;
+
+  margin-top: 22px;
+
+  color: var(--hud-text-dim);
+
+  font-family: monospace;
+
+  font-size: 9px;
+
+  letter-spacing: 0.16em;
+
+  text-transform: uppercase;
+}
+
+
+/* =========================================================
+   BOOT RINGS
+   ========================================================= */
+
+.boot-rings {
+  position: absolute;
+
+  width: 360px;
+  height: 360px;
+
+  pointer-events: none;
+}
+
+
+.boot-ring {
+  position: absolute;
+
+  inset: 0;
+
+  border-radius: 50%;
+
+  border: 1px solid rgba(77, 232, 255, 0.13);
+}
+
+
+.boot-ring:nth-child(1) {
+  animation: bootRingOne 8s linear infinite;
+}
+
+
+.boot-ring:nth-child(2) {
+  inset: 28px;
+
+  border-style: dashed;
+
+  border-color: rgba(77, 232, 255, 0.09);
+
+  animation: bootRingTwo 12s linear infinite reverse;
+}
+
+
+.boot-ring:nth-child(3) {
+  inset: 65px;
+
+  border-color: rgba(77, 232, 255, 0.07);
+
+  animation: bootRingThree 6s linear infinite;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+
+  .dashboard {
+    grid-template-columns:
+      minmax(190px, 0.7fr)
+      minmax(360px, 1.4fr)
+      minmax(190px, 0.7fr);
+
+    gap: 18px;
+
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+
+
+  .hud-panel {
+    padding: 18px;
+  }
+
+
+  .dashboard-center {
+    min-height: 500px;
+  }
+
+
+  .voice-status {
+    top: calc(50% + 185px);
+  }
+}
+
+
+@media (max-width: 850px) {
+
+  .topbar {
+    height: 64px;
+
+    padding: 0 18px;
+  }
+
+
+  .topbar::after {
+    left: 18px;
+    right: 18px;
+  }
+
+
+  .dashboard {
+    grid-template-columns: 1fr;
+
+    min-height: auto;
+
+    padding: 20px 18px 30px;
+
+    gap: 18px;
+  }
+
+
+  .left-panel,
+  .right-panel {
+    min-height: auto;
+  }
+
+
+  .dashboard-center {
+    min-height: 520px;
+
+    order: -1;
+  }
+
+
+  .left-panel {
+    order: 2;
+  }
+
+
+  .right-panel {
+    order: 3;
+  }
+
+
+  .voice-status {
+    top: calc(50% + 185px);
+  }
+
+
+  footer {
+    height: 48px;
+  }
+}
+
+
+@media (max-width: 520px) {
+
+  .topbar {
+    padding: 0 14px;
+  }
+
+
+  .brand,
+  .logo,
+  .topbar-brand {
+    font-size: 11px;
+
+    letter-spacing: 0.16em;
+  }
+
+
+  .system-status,
+  .status,
+  .topbar-status {
+    font-size: 8px;
+  }
+
+
+  .dashboard {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+
+  .dashboard-center {
+    min-height: 450px;
+  }
+
+
+  .voice-status {
+    top: calc(50% + 160px);
+
+    font-size: 8px;
+
+    letter-spacing: 0.15em;
+  }
+
+
+  .user-subtitle {
+    bottom: 70px;
+
+    font-size: 9px;
+  }
+
+
+  .mic-button {
+    width: 52px;
+    height: 52px;
+  }
+
+
+  .hud-panel {
+    padding: 16px;
+  }
+
+
+  footer {
+    font-size: 7px;
+
+    letter-spacing: 0.13em;
+  }
+}
+
+
+/* =========================================================
+   ANIMATIONS
+   ========================================================= */
+
+@keyframes atlasPulse {
+
+  0%,
+  100% {
+    opacity: 0.55;
+
+    transform: scale(0.9);
+
+    box-shadow:
+      0 0 7px var(--atlas-cyan),
+      0 0 14px rgba(77, 232, 255, 0.35);
+  }
+
+
+  50% {
+    opacity: 1;
+
+    transform: scale(1.1);
+
+    box-shadow:
+      0 0 10px var(--atlas-cyan),
+      0 0 22px rgba(77, 232, 255, 0.65);
+  }
+}
+
+
+@keyframes statusPulse {
+
+  0%,
+  100% {
+    opacity: 0.45;
+
+    transform: scale(0.8);
+  }
+
+
+  50% {
+    opacity: 1;
+
+    transform: scale(1.15);
+  }
+}
+
+
+@keyframes micListening {
+
+  0%,
+  100% {
+    box-shadow:
+      0 0 18px rgba(77, 232, 255, 0.18),
+      inset 0 0 15px rgba(77, 232, 255, 0.06);
+  }
+
+
+  50% {
+    box-shadow:
+      0 0 30px rgba(77, 232, 255, 0.32),
+      0 0 55px rgba(77, 232, 255, 0.08),
+      inset 0 0 20px rgba(77, 232, 255, 0.1);
+  }
+}
+
+
+@keyframes dataScan {
+
+  0% {
+    width: 20%;
+    opacity: 0.35;
+  }
+
+
+  50% {
+    width: 76%;
+    opacity: 1;
+  }
+
+
+  100% {
+    width: 38%;
+    opacity: 0.5;
+  }
+}
+
+
+@keyframes streamAppear {
+
+  0%,
+  100% {
+    opacity: 0;
+
+    transform: translateX(-6px);
+  }
+
+
+  15%,
+  75% {
+    opacity: 0.7;
+
+    transform: translateX(0);
+  }
+}
+
+
+@keyframes bootLogoIn {
+
+  0% {
+    opacity: 0;
+
+    transform:
+      scale(0.85)
+      translateY(10px);
+
+    filter: blur(8px);
+  }
+
+
+  100% {
+    opacity: 1;
+
+    transform:
+      scale(1)
+      translateY(0);
+
+    filter: blur(0);
+  }
+}
+
+
+@keyframes bootRingOne {
+
   from {
     transform: rotate(0deg);
   }
+
 
   to {
     transform: rotate(360deg);
@@ -271,73 +1544,138 @@ footer {
 }
 
 
-/* =========================================================
-   RESULTS PAGE SCROLLING
-========================================================= */
+@keyframes bootRingTwo {
 
-.results-page {
-  height: calc(100vh - 100px);
+  from {
+    transform: rotate(0deg);
+  }
 
-  overflow-y: auto;
-  overflow-x: hidden;
 
-  scrollbar-width: thin;
-  scrollbar-color: rgba(67, 234, 255, 0.35) transparent;
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 
-/* Chrome / Edge scrollbar */
+@keyframes bootRingThree {
 
-.results-page::-webkit-scrollbar {
-  width: 5px;
-}
+  from {
+    transform: rotate(360deg);
+  }
 
-.results-page::-webkit-scrollbar-track {
-  background: transparent;
-}
 
-.results-page::-webkit-scrollbar-thumb {
-  background: rgba(67, 234, 255, 0.35);
-
-  border-radius: 10px;
-}
-
-.results-page::-webkit-scrollbar-thumb:hover {
-  background: rgba(67, 234, 255, 0.65);
+  to {
+    transform: rotate(0deg);
+  }
 }
 
 
 /* =========================================================
-   RESPONSIVE HUD
-========================================================= */
+   ACCESSIBILITY
+   ========================================================= */
 
-@media (max-width: 900px) {
+@media (prefers-reduced-motion: reduce) {
 
-  .hud-corner {
-    width: 32px;
-    height: 32px;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+
+    animation-iteration-count: 1 !important;
+
+    scroll-behavior: auto !important;
   }
+}
 
-  .radar-sweep {
-    width: 400px;
-    height: 400px;
-  }
+/* =========================================================
+   ATLAS 3K — REAL THREE.JS GLOBE CONTAINER
+   ========================================================= */
 
+.center {
+  position: relative;
+
+  width: 100%;
+  height: 100%;
+  min-height: 560px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: visible;
+
+  isolation: isolate;
 }
 
 
-@media (max-width: 600px) {
+/* AtlasGlobe wrapper */
+.center > * {
+  position: relative;
+  z-index: 3;
+}
 
-  .hud-corner {
-    width: 25px;
-    height: 25px;
 
-    opacity: 0.4;
+/* Three.js canvas */
+.center canvas {
+  position: relative !important;
+
+  z-index: 10 !important;
+
+  display: block !important;
+
+  width: 100% !important;
+  height: 100% !important;
+
+  visibility: visible !important;
+  opacity: 1 !important;
+
+  pointer-events: auto;
+}
+
+
+/* Keep voice HUD above globe */
+.center .voice-status {
+  z-index: 20;
+}
+
+
+.center .user-subtitle {
+  z-index: 21;
+}
+
+
+.center .mic-button {
+  z-index: 30;
+}
+
+
+.center .voice-hint {
+  z-index: 21;
+}
+
+
+/* =========================================================
+   RESPONSIVE GLOBE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+  .center {
+    min-height: 500px;
   }
+}
 
-  .radar-sweep {
-    width: 300px;
-    height: 300px;
+
+@media (max-width: 850px) {
+  .center {
+    min-height: 520px;
+
+    order: -1;
   }
+}
 
+
+@media (max-width: 520px) {
+  .center {
+    min-height: 450px;
+  }
 }

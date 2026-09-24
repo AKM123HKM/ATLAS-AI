@@ -2,21 +2,28 @@
   box-sizing: border-box;
 }
 
-body {
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
   margin: 0;
+}
+
+body {
   background: #02070b;
   color: #d8faff;
   font-family: "Segoe UI", sans-serif;
+  overflow: hidden;
 }
 
 button {
   font-family: inherit;
 }
 
-
-/* =========================
+/* =========================================================
    BOOT SCREEN
-========================= */
+   ========================================================= */
 
 .boot-screen {
   width: 100vw;
@@ -84,8 +91,9 @@ button {
     0 0 25px rgba(67, 234, 255, 0.4);
 }
 
-
-/* BOOT CORE */
+/* =========================================================
+   BOOT CORE
+   ========================================================= */
 
 .boot-core {
   width: 220px;
@@ -107,7 +115,6 @@ button {
   justify-content: center;
 
   border: 1px solid #43eaff;
-
   border-radius: 50%;
 
   color: #43eaff;
@@ -151,10 +158,9 @@ button {
   animation: spin 3s linear infinite;
 }
 
-
-/* =========================
+/* =========================================================
    MAIN APP
-========================= */
+   ========================================================= */
 
 .app {
   width: 100vw;
@@ -167,45 +173,42 @@ button {
       rgba(67, 234, 255, 0.025) 1px,
       transparent 1px
     ),
-
     linear-gradient(
       90deg,
       rgba(67, 234, 255, 0.025) 1px,
       transparent 1px
     ),
-
     radial-gradient(
       circle at center,
       rgba(0, 180, 220, 0.12),
       transparent 45%
     ),
-
     #02070b;
 
   background-size: 40px 40px;
 }
 
-
-/* =========================
+/* =========================================================
    TOP BAR
-========================= */
+   ========================================================= */
 
 .topbar {
   height: 65px;
 
-  border-bottom: 1px solid rgba(67, 234, 255, 0.2);
+  border-bottom:
+    1px solid rgba(67, 234, 255, 0.2);
 
   display: flex;
-
   align-items: center;
-
   justify-content: space-between;
 
   padding: 0 30px;
 
   font-size: 10px;
-
   letter-spacing: 3px;
+
+  position: relative;
+  z-index: 20;
 }
 
 .system-status {
@@ -224,12 +227,12 @@ button {
 
   margin-right: 8px;
 
-  box-shadow: 0 0 12px #43eaff;
+  box-shadow:
+    0 0 12px #43eaff;
 }
 
 .logo {
   font-size: 17px;
-
   letter-spacing: 5px;
 }
 
@@ -241,10 +244,9 @@ button {
   color: #4c8995;
 }
 
-
-/* =========================
+/* =========================================================
    DASHBOARD
-========================= */
+   ========================================================= */
 
 .dashboard {
   height: calc(100vh - 100px);
@@ -253,36 +255,50 @@ button {
 
   grid-template-columns:
     260px
-    1fr
+    minmax(0, 1fr)
     340px;
 }
 
-
-/* =========================
+/* =========================================================
    PANELS
-========================= */
+   ========================================================= */
 
 .left-panel,
 .right-panel {
   padding: 25px;
+
+  position: relative;
+  z-index: 10;
 }
 
 .left-panel {
-  border-right: 1px solid rgba(67, 234, 255, 0.15);
+  border-right:
+    1px solid rgba(67, 234, 255, 0.15);
 }
 
 .right-panel {
-  border-left: 1px solid rgba(67, 234, 255, 0.15);
+  border-left:
+    1px solid rgba(67, 234, 255, 0.15);
 }
 
 .panel {
-  border: 1px solid rgba(67, 234, 255, 0.2);
+  border:
+    1px solid rgba(67, 234, 255, 0.2);
 
-  background: rgba(3, 18, 25, 0.55);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(3, 22, 31, 0.75),
+      rgba(3, 12, 18, 0.45)
+    );
 
   padding: 15px;
 
   margin-bottom: 18px;
+
+  box-shadow:
+    inset 0 0 30px rgba(0, 200, 255, 0.025),
+    0 0 20px rgba(0, 160, 220, 0.025);
 }
 
 .panel-title {
@@ -294,15 +310,16 @@ button {
 
   padding-bottom: 12px;
 
-  border-bottom: 1px solid rgba(67, 234, 255, 0.15);
+  border-bottom:
+    1px solid rgba(67, 234, 255, 0.15);
 }
 
-
-/* BRAND */
+/* =========================================================
+   BRAND
+   ========================================================= */
 
 .brand-panel {
   border: none;
-
   background: transparent;
 }
 
@@ -329,8 +346,9 @@ button {
   color: #43eaff;
 }
 
-
-/* STATUS */
+/* =========================================================
+   STATUS
+   ========================================================= */
 
 .status-row {
   display: flex;
@@ -339,7 +357,8 @@ button {
 
   padding: 12px 0;
 
-  border-bottom: 1px solid rgba(67, 234, 255, 0.08);
+  border-bottom:
+    1px solid rgba(67, 234, 255, 0.08);
 
   font-size: 9px;
 
@@ -352,12 +371,12 @@ button {
 
 .status-row b {
   color: #43eaff;
-
   font-weight: normal;
 }
 
-
-/* INFO */
+/* =========================================================
+   INFO
+   ========================================================= */
 
 .info {
   color: #65838a;
@@ -367,340 +386,214 @@ button {
   line-height: 1.7;
 }
 
-
-/* =========================
+/* =========================================================
    CENTER
-========================= */
+   ========================================================= */
 
 .center {
+  min-width: 0;
+  min-height: 0;
+
   display: flex;
 
   flex-direction: column;
 
   align-items: center;
-
   justify-content: center;
 
   position: relative;
+
+  overflow: hidden;
+
+  isolation: isolate;
 }
 
+/* =========================================================
+   GLOBE
+   ========================================================= */
 
-/* =========================
-   ATLAS CORE
-========================= */
+.atlas-globe {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
 
-/* =========================
-   AI CORE
-========================= */
+.atlas-globe canvas {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
 
-.ai-core {
-  width: 460px;
-  height: 460px;
+/* =========================================================
+   GLOBE HUD LABELS
+   ========================================================= */
 
-  position: relative;
+.globe-hud-label {
+  position: absolute;
 
   display: flex;
-  align-items: center;
-  justify-content: center;
 
-  perspective: 900px;
+  flex-direction: column;
+
+  gap: 3px;
+
+  pointer-events: none;
+
+  z-index: 5;
+
+  font-size: 7px;
+
+  letter-spacing: 2px;
+
+  color: rgba(75, 232, 255, 0.75);
+
+  text-shadow:
+    0 0 8px rgba(67, 234, 255, 0.7);
 }
 
+.globe-hud-label span {
+  font-size: 6px;
 
-/* =========================
-   AURA
-========================= */
+  color: rgba(177, 249, 255, 0.45);
+}
 
-.ai-aura {
+.globe-hud-label b {
+  font-weight: normal;
+}
+
+.globe-label-top {
+  top: 13%;
+
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  text-align: center;
+}
+
+.globe-label-left {
+  left: 4%;
+
+  top: 50%;
+
+  transform: translateY(-50%);
+}
+
+.globe-label-right {
+  right: 4%;
+
+  top: 50%;
+
+  transform: translateY(-50%);
+
+  text-align: right;
+}
+
+/* =========================================================
+   CROSSHAIRS
+   ========================================================= */
+
+.globe-crosshair {
   position: absolute;
 
-  width: 280px;
-  height: 280px;
-
-  border-radius: 50%;
-
-  background: radial-gradient(
-    circle,
-    rgba(80, 230, 255, 0.18),
-    rgba(30, 160, 220, 0.06) 45%,
-    transparent 70%
-  );
-
-  filter: blur(20px);
-}
-
-.aura-1 {
-  animation: auraFloat 5s ease-in-out infinite;
-}
-
-.aura-2 {
-  width: 340px;
-  height: 340px;
-
-  opacity: 0.45;
-
-  animation: auraFloat 7s ease-in-out infinite reverse;
-}
-
-.aura-3 {
-  width: 400px;
-  height: 400px;
-
-  opacity: 0.2;
-
-  animation: auraFloat 9s ease-in-out infinite;
-}
-
-
-/* =========================
-   MAIN ORB
-========================= */
-
-.ai-orb {
-  width: 180px;
-  height: 180px;
-
-  position: relative;
-
-  border-radius: 50%;
-
-  transform-style: preserve-3d;
-
-  background:
-
-    radial-gradient(
-      circle at 35% 30%,
-      rgba(255, 255, 255, 0.9),
-      transparent 7%
-    ),
-
-    radial-gradient(
-      circle at 38% 35%,
-      rgba(90, 240, 255, 0.8),
-      transparent 22%
-    ),
-
-    radial-gradient(
-      circle at 50% 55%,
-      rgba(0, 170, 220, 0.9),
-      rgba(0, 35, 55, 0.9) 65%,
-      rgba(0, 5, 10, 1)
-    );
+  background: rgba(67, 234, 255, 0.35);
 
   box-shadow:
-
-    0 0 20px rgba(70, 230, 255, 0.8),
-
-    0 0 60px rgba(30, 200, 255, 0.45),
-
-    0 0 130px rgba(30, 180, 255, 0.2),
-
-    inset -25px -25px 50px rgba(0, 0, 0, 0.7),
-
-    inset 20px 20px 40px rgba(130, 250, 255, 0.35);
-
-  animation:
-    orbFloat 4s ease-in-out infinite,
-    orbBreathing 3s ease-in-out infinite;
-}
-
-
-/* =========================
-   LIQUID SURFACES
-========================= */
-
-.orb-surface {
-  position: absolute;
-
-  inset: -3px;
-
-  border-radius: 48% 52% 55% 45% / 50% 45% 55% 50%;
+    0 0 8px rgba(67, 234, 255, 0.25);
 
   pointer-events: none;
 }
 
-.surface-1 {
-  background:
-    radial-gradient(
-      ellipse at 30% 20%,
-      rgba(255,255,255,0.35),
-      transparent 30%
-    );
-
-  filter: blur(1px);
-
-  animation: morphOne 5s ease-in-out infinite;
-}
-
-.surface-2 {
-  background:
-    radial-gradient(
-      ellipse at 70% 70%,
-      rgba(0, 220, 255, 0.4),
-      transparent 35%
-    );
-
-  mix-blend-mode: screen;
-
-  animation: morphTwo 4s ease-in-out infinite;
-}
-
-.surface-3 {
-  background:
-    radial-gradient(
-      ellipse at 50% 50%,
-      transparent 40%,
-      rgba(60, 230, 255, 0.35)
-    );
-
-  filter: blur(4px);
-
-  animation: morphThree 6s ease-in-out infinite;
-}
-
-
-/* =========================
-   INNER CORE
-========================= */
-
-.orb-core {
-  position: absolute;
-
-  width: 70px;
-  height: 70px;
+.crosshair-top,
+.crosshair-bottom {
+  width: 1px;
+  height: 18px;
 
   left: 50%;
+
+  transform: translateX(-50%);
+}
+
+.crosshair-top {
+  top: 3%;
+}
+
+.crosshair-bottom {
+  bottom: 3%;
+}
+
+.crosshair-left,
+.crosshair-right {
+  height: 1px;
+  width: 18px;
+
   top: 50%;
 
-  transform: translate(-50%, -50%);
+  transform: translateY(-50%);
+}
 
-  border-radius: 50%;
+.crosshair-left {
+  left: 3%;
+}
 
-  background:
-    radial-gradient(
-      circle,
-      rgba(220, 255, 255, 0.9),
-      rgba(80, 235, 255, 0.6) 25%,
-      rgba(0, 120, 180, 0.1) 70%,
-      transparent
+.crosshair-right {
+  right: 3%;
+}
+
+/* =========================================================
+   GLOBE STATES
+   ========================================================= */
+
+.atlas-globe-listening {
+  filter:
+    drop-shadow(
+      0 0 22px rgba(67, 234, 255, 0.35)
     );
 
-  filter: blur(3px);
-
-  box-shadow:
-    0 0 30px rgba(100, 240, 255, 0.8);
+  animation:
+    globeListening 1.2s ease-in-out infinite;
 }
 
+.atlas-globe-speaking {
+  filter:
+    drop-shadow(
+      0 0 30px rgba(111, 82, 255, 0.4)
+    );
 
-/* =========================
-   ANIMATIONS
-========================= */
+  animation:
+    globeSpeaking 0.7s ease-in-out infinite;
+}
 
-@keyframes orbFloat {
-
-  0%, 100% {
-    transform:
-      translateY(0)
-      rotateX(0deg)
-      rotateY(0deg);
+@keyframes globeListening {
+  0%,
+  100% {
+    transform: scale(1);
   }
 
   50% {
-    transform:
-      translateY(-8px)
-      rotateX(5deg)
-      rotateY(-8deg);
+    transform: scale(1.025);
   }
-
 }
 
-
-@keyframes orbBreathing {
-
-  0%, 100% {
-    scale: 1;
+@keyframes globeSpeaking {
+  0%,
+  100% {
+    transform: scale(1);
   }
 
-  50% {
-    scale: 1.04;
+  30% {
+    transform: scale(1.018);
   }
 
+  60% {
+    transform: scale(0.985);
+  }
 }
 
-
-@keyframes auraFloat {
-
-  0%, 100% {
-    transform: scale(0.95);
-    opacity: 0.5;
-  }
-
-  50% {
-    transform: scale(1.08);
-    opacity: 0.8;
-  }
-
-}
-
-
-@keyframes morphOne {
-
-  0%, 100% {
-    border-radius:
-      48% 52% 55% 45%
-      / 50% 45% 55% 50%;
-
-    transform: rotate(0deg) scale(1);
-  }
-
-  50% {
-    border-radius:
-      60% 40% 45% 55%
-      / 40% 60% 50% 50%;
-
-    transform: rotate(20deg) scale(1.04);
-  }
-
-}
-
-
-@keyframes morphTwo {
-
-  0%, 100% {
-    border-radius:
-      55% 45% 50% 50%
-      / 45% 55% 45% 55%;
-
-    transform: rotate(0deg);
-  }
-
-  50% {
-    border-radius:
-      40% 60% 60% 40%
-      / 60% 40% 50% 50%;
-
-    transform: rotate(-25deg);
-  }
-
-}
-
-
-@keyframes morphThree {
-
-  0%, 100% {
-    transform: scale(1) rotate(0deg);
-  }
-
-  50% {
-    transform: scale(1.08) rotate(40deg);
-  }
-
-}
-
-
-/* =========================
+/* =========================================================
    VOICE
-========================= */
+   ========================================================= */
 
 .voice-status {
   color: #4c9ba8;
@@ -710,6 +603,8 @@ button {
   letter-spacing: 4px;
 
   margin-top: -25px;
+
+  z-index: 5;
 }
 
 .mic-button {
@@ -720,7 +615,8 @@ button {
 
   border-radius: 50%;
 
-  border: 1px solid rgba(100, 235, 255, 0.5);
+  border:
+    1px solid rgba(100, 235, 255, 0.5);
 
   background:
     radial-gradient(
@@ -740,6 +636,8 @@ button {
     transform 0.2s,
     box-shadow 0.2s,
     background 0.2s;
+
+  z-index: 5;
 }
 
 .mic-button:hover {
@@ -760,6 +658,29 @@ button {
   font-size: 8px;
 }
 
+.mic-active {
+  animation:
+    micPulse 1s ease-in-out infinite;
+
+  background:
+    rgba(67, 234, 255, 0.18);
+
+  box-shadow:
+    0 0 20px rgba(67, 234, 255, 0.4),
+    0 0 50px rgba(67, 234, 255, 0.15);
+}
+
+@keyframes micPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.08);
+  }
+}
+
 .voice-hint {
   margin-top: 10px;
 
@@ -768,16 +689,78 @@ button {
   letter-spacing: 3px;
 
   color: #406b73;
+
+  z-index: 5;
 }
 
+/* =========================================================
+   SUBTITLES
+   ========================================================= */
 
-/* =========================
-   RIGHT
-========================= */
+.user-subtitle,
+.ai-subtitle {
+  max-width: 520px;
+
+  text-align: center;
+
+  line-height: 1.5;
+
+  font-size: 13px;
+
+  letter-spacing: 0.5px;
+
+  margin-top: 12px;
+
+  padding: 8px 18px;
+
+  color: rgba(210, 250, 255, 0.8);
+
+  z-index: 5;
+}
+
+.ai-subtitle {
+  color: #dfffff;
+
+  text-shadow:
+    0 0 15px rgba(67, 234, 255, 0.25);
+}
+
+.subtitle-label {
+  display: block;
+
+  margin-bottom: 4px;
+
+  font-size: 7px;
+
+  letter-spacing: 3px;
+
+  color: #43eaff;
+
+  opacity: 0.7;
+}
+
+.subtitle-speaking {
+  animation:
+    subtitlePulse 1.2s ease-in-out infinite;
+}
+
+@keyframes subtitlePulse {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* =========================================================
+   RIGHT OUTPUT
+   ========================================================= */
 
 .response-panel {
   height: 80%;
-
   margin: 0;
 }
 
@@ -789,7 +772,6 @@ button {
   flex-direction: column;
 
   align-items: center;
-
   justify-content: center;
 
   text-align: center;
@@ -814,31 +796,63 @@ button {
 
 .waiting small {
   font-size: 8px;
-
   color: #36545a;
 }
 
+.output-indicator {
+  font-size: 20px;
 
-/* =========================
+  color: #43eaff;
+
+  text-shadow:
+    0 0 20px #43eaff;
+
+  animation:
+    outputPulse 1s ease-in-out infinite;
+}
+
+@keyframes outputPulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+.output-text {
+  color: #8cb8c0;
+
+  font-size: 11px;
+
+  line-height: 1.7;
+
+  max-width: 260px;
+}
+
+/* =========================================================
    FOOTER
-========================= */
+   ========================================================= */
 
 footer {
   position: absolute;
 
   bottom: 0;
-
   left: 0;
   right: 0;
 
   height: 35px;
 
-  border-top: 1px solid rgba(67, 234, 255, 0.15);
+  border-top:
+    1px solid rgba(67, 234, 255, 0.15);
 
   display: flex;
 
   justify-content: space-between;
-
   align-items: center;
 
   padding: 0 25px;
@@ -848,12 +862,13 @@ footer {
   letter-spacing: 2px;
 
   color: #365b63;
+
+  z-index: 20;
 }
 
-
-/* =========================
-   ANIMATIONS
-========================= */
+/* =========================================================
+   BOOT ANIMATIONS
+   ========================================================= */
 
 @keyframes spin {
   to {
@@ -867,375 +882,68 @@ footer {
   }
 }
 
-/* =========================================
-   AI STATES
-========================================= */
+/* =========================================================
+   MOBILE / SMALL WINDOWS
+   ========================================================= */
 
-/* IDLE BREATHING */
-
-.ai-core {
-  animation: aiBreathing 4s ease-in-out infinite;
-}
-
-@keyframes aiBreathing {
-
-  0%,
-  100% {
-    transform: scale(0.97);
+@media (max-width: 1000px) {
+  .dashboard {
+    grid-template-columns:
+      190px
+      minmax(0, 1fr)
+      250px;
   }
 
-  50% {
-    transform: scale(1.025);
-  }
-}
-
-
-/* =========================================
-   LISTENING
-========================================= */
-
-.ai-core.listening {
-  animation:
-    aiListening 1.2s ease-in-out infinite;
-}
-
-.ai-core.listening .ai-orb {
-  box-shadow:
-    0 0 25px rgba(80, 235, 255, 0.9),
-    0 0 80px rgba(30, 200, 255, 0.6),
-    0 0 150px rgba(30, 180, 255, 0.3);
-}
-
-@keyframes aiListening {
-
-  0%,
-  100% {
-    transform: scale(1);
+  .left-panel,
+  .right-panel {
+    padding: 15px;
   }
 
-  50% {
-    transform: scale(1.06);
+  .atlas-globe {
+    width: min(520px, 70vw);
+    height: min(520px, 65vh);
   }
 }
 
-
-/* =========================================
-   SPEAKING
-========================================= */
-
-.ai-core.speaking {
-  animation: speakingMovement 0.7s ease-in-out infinite;
-}
-
-
-/*
-  This makes the orb deliberately NOT
-  remain a perfect circle.
-*/
-
-.ai-core.speaking .ai-orb {
-
-  animation:
-    speakingFloat 0.8s ease-in-out infinite,
-    speakingJiggle 1.15s ease-in-out infinite;
-
-}
-
-
-/* irregular blob movement */
-
-@keyframes speakingMovement {
-
-  0% {
-    transform: scale(1) rotate(0deg);
+@media (max-width: 760px) {
+  body {
+    overflow: auto;
   }
 
-  20% {
-    transform: scale(1.035) rotate(-1deg);
+  .app {
+    min-height: 100vh;
+    height: auto;
   }
 
-  40% {
-    transform: scale(0.97) rotate(1.5deg);
+  .dashboard {
+    height: auto;
+
+    min-height:
+      calc(100vh - 100px);
+
+    grid-template-columns: 1fr;
   }
 
-  60% {
-    transform: scale(1.055) rotate(-1deg);
+  .left-panel,
+  .right-panel {
+    display: none;
   }
 
-  80% {
-    transform: scale(0.985) rotate(1deg);
+  .center {
+    min-height:
+      calc(100vh - 100px);
   }
 
-  100% {
-    transform: scale(1) rotate(0deg);
+  .atlas-globe {
+    width: 92vw;
+    height: 65vh;
   }
 
-}
-
-
-/* actual blob deformation */
-
-@keyframes speakingJiggle {
-
-  0% {
-    border-radius:
-      50% 50% 50% 50%
-      / 50% 50% 50% 50%;
+  .voice-status {
+    margin-top: -10px;
   }
 
-  15% {
-    border-radius:
-      47% 53% 56% 44%
-      / 54% 43% 57% 46%;
+  footer {
+    position: relative;
   }
-
-  30% {
-    border-radius:
-      56% 44% 47% 53%
-      / 45% 57% 43% 55%;
-  }
-
-  45% {
-    border-radius:
-      43% 57% 54% 46%
-      / 58% 45% 55% 42%;
-  }
-
-  60% {
-    border-radius:
-      54% 46% 42% 58%
-      / 44% 56% 48% 52%;
-  }
-
-  75% {
-    border-radius:
-      46% 54% 58% 42%
-      / 53% 47% 57% 43%;
-  }
-
-  90% {
-    border-radius:
-      52% 48% 46% 54%
-      / 48% 55% 45% 52%;
-  }
-
-  100% {
-    border-radius:
-      50% 50% 50% 50%
-      / 50% 50% 50% 50%;
-  }
-
-}
-
-
-/* subtle vertical movement */
-
-@keyframes speakingFloat {
-
-  0%,
-  100% {
-    transform: translateY(0) scale(1);
-  }
-
-  30% {
-    transform: translateY(-5px) scale(1.025);
-  }
-
-  60% {
-    transform: translateY(3px) scale(0.975);
-  }
-
-  80% {
-    transform: translateY(-3px) scale(1.035);
-  }
-
-}
-
-
-/* make the inner layers move differently */
-
-.ai-core.speaking .surface-1 {
-  animation:
-    morphOne 1.2s ease-in-out infinite;
-}
-
-.ai-core.speaking .surface-2 {
-  animation:
-    morphTwo 0.9s ease-in-out infinite;
-}
-
-.ai-core.speaking .surface-3 {
-  animation:
-    morphThree 1.4s ease-in-out infinite;
-}
-
-.ai-core.speaking .orb-core {
-  animation:
-    corePulse 0.45s ease-in-out infinite;
-}
-
-@keyframes corePulse {
-
-  0%,
-  100% {
-    transform: translate(-50%, -50%) scale(0.9);
-    opacity: 0.7;
-  }
-
-  50% {
-    transform: translate(-50%, -50%) scale(1.2);
-    opacity: 1;
-  }
-
-}
-
-
-/* =========================================
-   MICROPHONE ACTIVE
-========================================= */
-
-.mic-active {
-  animation: micPulse 1s ease-in-out infinite;
-
-  background:
-    rgba(67, 234, 255, 0.18);
-
-  box-shadow:
-    0 0 20px rgba(67, 234, 255, 0.4),
-    0 0 50px rgba(67, 234, 255, 0.15);
-}
-
-@keyframes micPulse {
-
-  0%,
-  100% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.08);
-  }
-
-}
-
-
-/* =========================================
-   SUBTITLES
-========================================= */
-
-.user-subtitle,
-.ai-subtitle {
-
-  max-width: 520px;
-
-  text-align: center;
-
-  line-height: 1.5;
-
-  font-size: 13px;
-
-  letter-spacing: 0.5px;
-
-  margin-top: 12px;
-
-  padding: 8px 18px;
-
-  color: rgba(210, 250, 255, 0.8);
-
-}
-
-
-/* AI answer is more prominent */
-
-.ai-subtitle {
-
-  color: #dfffff;
-
-  text-shadow:
-    0 0 15px rgba(67, 234, 255, 0.25);
-
-}
-
-
-/* small label above subtitle */
-
-.subtitle-label {
-
-  display: block;
-
-  margin-bottom: 4px;
-
-  font-size: 7px;
-
-  letter-spacing: 3px;
-
-  color: #43eaff;
-
-  opacity: 0.7;
-}
-
-
-/* speaking subtitle glows */
-
-.subtitle-speaking {
-
-  animation:
-    subtitlePulse 1.2s ease-in-out infinite;
-}
-
-@keyframes subtitlePulse {
-
-  0%,
-  100% {
-    opacity: 0.75;
-  }
-
-  50% {
-    opacity: 1;
-  }
-
-}
-
-
-/* =========================================
-   RIGHT OUTPUT
-========================================= */
-
-.output-indicator {
-
-  font-size: 20px;
-
-  color: #43eaff;
-
-  text-shadow:
-    0 0 20px #43eaff;
-
-  animation:
-    outputPulse 1s ease-in-out infinite;
-}
-
-@keyframes outputPulse {
-
-  0%,
-  100% {
-    opacity: 0.4;
-    transform: scale(0.9);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1.1);
-  }
-
-}
-
-.output-text {
-
-  color: #8cb8c0;
-
-  font-size: 11px;
-
-  line-height: 1.7;
-
-  max-width: 260px;
 }

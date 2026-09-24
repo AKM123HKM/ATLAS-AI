@@ -6,6 +6,7 @@ import MusicPlayer from "./MusicPlayer";
 import WeatherDialog from "./WeatherDialog";
 import MathDialog from "./MathDialog";
 import { solveMath, isMathQuestion } from "./mathEngine";
+import AtlasGlobe from "./AtlasGlobe";
 
 // =========================================================
 // PARTICLE FIELD
@@ -166,12 +167,15 @@ function App() {
 
   const recognitionRef = useRef(null);
   const wakeWordRecognitionRef = useRef(null);
+  const wakeRestartTimerRef = useRef(null);
+  const wakeSessionIdRef = useRef(0);
 
   // Always-current mirrors of showMusic/showWeather, used inside
   // setTimeout/speech callbacks so they never read a stale value
   // from the render that created the closure.
   const showMusicRef = useRef(false);
   const showWeatherRef = useRef(false);
+  const showMathRef = useRef(false);
 
   useEffect(() => {
     showMusicRef.current = showMusic;
@@ -180,6 +184,10 @@ function App() {
   useEffect(() => {
     showWeatherRef.current = showWeather;
   }, [showWeather]);
+
+  useEffect(() => {
+    showMathRef.current = showMath;
+  }, [showMath]);
 
   const isProcessingRef = useRef(false);
 
@@ -439,131 +447,85 @@ function App() {
     return true;
   };
 
-// =========================================================
-// LOCAL MATH CORE — ZERO AI/API REQUESTS
-// =========================================================
+  // =========================================================
+  // LOCAL MATH CORE — ZERO AI/API REQUESTS
+  // =========================================================
 
-const handleMathCommand = (question) => {
-  const q = String(question || "").toLowerCase().trim();
-
-  // HARD LOCAL MATH DETECTION
-  // This intentionally lives in App.jsx so math can NEVER
-  // accidentally fall through to askAtlas()/API.
-  const localMath =
-    isMathQuestion(q) ||
-    /\bsquare\s+root\b/.test(q) ||
-    /\bsqrt\b/.test(q) ||
-    /\bcube\s+root\b/.test(q) ||
-    /\bcalculate\b/.test(q) ||
-    /\bcompute\b/.test(q) ||
-    /\bsolve\b/.test(q) ||
-    /\bevaluate\b/.test(q) ||
-    /\bwhat\s+is\b.*\d/.test(q) ||
-    /\bplus\b|\bminus\b|\btimes\b|\bdivided\s+by\b/.test(q) ||
-    /\bpercent\b|%/.test(q) ||
-    /\bsquared\b|\bcubed\b/.test(q) ||
-    /\bpower\b/.test(q) ||
-    /\bsin\b|\bsine\b|\bcos\b|\bcosine\b|\btan\b|\btangent\b/.test(q);
-
-  if (!localMath) {
-    return false;
-  }
-
-  console.log("========================================");
-  console.log("ATLAS: LOCAL MATH ROUTE");
-  console.log("Question:", question);
-  console.log("Calling MathJS — NO API");
-  console.log("========================================");
-
-  try {
-    const result = solveMath(question);
-
-    if (!result) {
-      throw new Error(
-        "MathJS returned no result for this expression."
-      );
+  const handleMathCommand = (question) => {
+    // Never let a detected math request fall through to the AI API.
+    if (!isMathQuestion(question)) {
+      return false;
     }
 
-    console.log("ATLAS: MATHJS RESULT:", result);
+    try {
+      console.log("ATLAS: LOCAL MATH ENGINE → MathJS");
+      const result = solveMath(question);
 
-    setMathResult(result);
-    setShowMath(true);
+      // FIX: solveMath() can return null (e.g. an unparseable
+      // expression that hits an edge case). Previously the code
+      // read result.type immediately below, which threw
+      // "Cannot read properties of null (reading 'type')" and
+      // crashed out of this handler entirely. Guard it here so the
+      // error path always runs instead, even as a second safety
+      // net on top of the mathEngine.js fix that stopped it from
+      // returning null in the first place.
+      if (!result) {
+        throw new Error("Unable to parse this expression locally.");
+      }
 
-    setUserText(question);
-    setAiText("");
+      setMathResult(result);
+      setShowMath(true);
+      setUserText(question);
+      setAiText("");
+      setResult(null);
+      setShowResults(false);
+      setStatus("MATH CORE ACTIVE");
+      isProcessingRef.current = true;
 
-    setResult(null);
-    setShowResults(false);
-
-    setStatus("MATH CORE ACTIVE");
-
-    // IMPORTANT:
-    // This keeps the request inside the local math system.
-    isProcessingRef.current = true;
-
-    const spoken =
-      result.type === "equation" && result.solutions
-        ? (
-            result.solutions.length
+      // FIX: previously this read result.value / result.derivative,
+      // which mathEngine.js never actually sets (it returns
+      // result.result and result.numericResult), so most answers
+      // spoke "undefined". mathEngine.js now always sets
+      // result.result to a display-ready string for every type, so
+      // using that directly is both correct and future-proof for
+      // any new answer type added there (mensuration, trig, etc.)
+      // without needing a matching change here every time.
+      const spoken =
+        result.type === "equation" && result.solutions
+          ? (result.solutions.length
               ? `The solution is ${result.solutions
-                  .map(
-                    (v) =>
-                      `${result.variable || "x"} equals ${v}`
-                  )
+                  .map((v) => `${result.variable || "x"} equals ${v}`)
                   .join(" and ")}.`
-              : "I could not find a real solution."
-          )
-        : result.result
-          ? `The answer is ${result.result}.`
-          : "The mathematical analysis is complete.";
+              : "I could not find a real solution.")
+          : result.result
+            ? `The answer is ${result.result}.`
+            : "The mathematical analysis is complete.";
+      setTimeout(() => speak(spoken), 80);
 
-    setTimeout(() => {
-      speak(spoken);
-    }, 80);
-
-    return true;
-
-  } catch (error) {
-    console.error("ATLAS LOCAL MATH ERROR:", error);
-
-    setMathResult({
-      type: "calculation",
-      title: "MATH CORE ERROR",
-      expression: question,
-      result: "Could not solve locally",
-      steps: [
-        `Expression received: ${question}`,
-        error?.message ||
-          "MathJS could not evaluate this expression."
-      ],
-      numericResult: null,
-      engine: "MathJS LOCAL ENGINE"
-    });
-
-    setShowMath(true);
-
-    setUserText(question);
-    setAiText("");
-
-    setResult(null);
-    setShowResults(false);
-
-    setStatus("MATH CORE — LOCAL ONLY");
-
-    isProcessingRef.current = true;
-
-    setTimeout(() => {
-      speak(
-        "I could not solve that locally. No AI request was sent."
-      );
-    }, 80);
-
-    // CRITICAL
-    // Even if MathJS fails, return TRUE.
-    // This prevents askAtlas() from ever being called.
-    return true;
-  }
-};
+      return true;
+    } catch (error) {
+      console.error("ATLAS MATH ERROR:", error);
+      // IMPORTANT: once a request is classified as math, NEVER fall through
+      // to askAtlas()/OpenRouter. Show the local engine error instead.
+      setMathResult({
+        type: "calculation",
+        title: "MATH CORE ERROR",
+        expression: question,
+        value: null,
+        error: error?.message || "Unable to solve this expression locally.",
+        engine: "MathJS LOCAL ENGINE",
+      });
+      setShowMath(true);
+      setUserText(question);
+      setAiText("");
+      setResult(null);
+      setShowResults(false);
+      setStatus("MATH CORE — LOCAL ONLY");
+      isProcessingRef.current = true;
+      setTimeout(() => speak("I could not solve that locally. No AI request was sent."), 80);
+      return true;
+    }
+  };
 
   // =========================================================
   // ASK ATLAS
@@ -760,7 +722,7 @@ const handleMathCommand = (question) => {
       }
 
       // Do not restart wake-word detection while math is open.
-      if (showMath) {
+      if (showMathRef.current) {
         return;
       }
 
@@ -1000,203 +962,177 @@ const handleMathCommand = (question) => {
   // WAKE WORD DETECTION
   // =========================================================
 
+  // IMPORTANT: keep the original continuous wake listener. The UI/globe
+  // must never create competing SpeechRecognition sessions.
   const startWakeWordDetection = () => {
-    // Never listen while music player is open
-    if (showMusicRef.current) {
-      return;
-    }
-
-    // Never listen while weather is open
-    if (showWeatherRef.current) {
-      return;
-    }
-
-    // Never listen while the local math core is open
-    if (showMath) {
-      return;
-    }
+    if (showMusicRef.current) return;
+    if (showWeatherRef.current) return;
+    if (showMathRef.current) return;
+    if (isProcessingRef.current) return;
 
     const SpeechRecognition =
       window.SpeechRecognition ||
       window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert(
-        "Speech recognition is not supported in this browser. Please use Google Chrome."
-      );
-
+      setStatus("VOICE RECOGNITION UNSUPPORTED");
       return;
     }
 
-    if (
-      wakeWordRecognitionRef.current ||
-      recognitionRef.current ||
-      isProcessingRef.current
-    ) {
+    // ONE wake recognizer at a time.
+    if (wakeWordRecognitionRef.current || recognitionRef.current) {
       return;
     }
 
-    const recognition =
-      new SpeechRecognition();
+    // ONE pending restart at a time.
+    if (wakeRestartTimerRef.current) {
+      return;
+    }
+
+    const sessionId = ++wakeSessionIdRef.current;
+    const recognition = new SpeechRecognition();
 
     recognition.lang = "en-US";
-
     recognition.continuous = true;
-
     recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    let wakeWordTriggered = false;
+    let intentionallyStopped = false;
+
+    console.log("ATLAS: creating wake session", sessionId);
 
     recognition.onstart = () => {
+      console.log("ATLAS: WAKE LISTENER STARTED", sessionId);
       setListening(false);
-
-      setStatus(
-        "WAITING FOR WAKE WORD"
-      );
+      setStatus("WAITING FOR WAKE WORD");
     };
 
-    // Prevents interim (not-yet-final) speech results from
-    // re-triggering wake-word detection multiple times for the
-    // same utterance — this was spawning overlapping recognition
-    // instances that fought over the mic.
-    let wakeWordTriggered = false;
-
-    recognition.onresult = (
-      event
-    ) => {
+    recognition.onresult = (event) => {
       if (wakeWordTriggered) return;
 
       let transcript = "";
 
-      for (
-        let i = event.resultIndex;
-        i < event.results.length;
-        i++
-      ) {
-        transcript +=
-          event.results[i][0]
-            .transcript;
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
       }
 
-      transcript =
-        transcript
-          .toLowerCase()
-          .trim();
+      transcript = transcript.toLowerCase().trim();
 
-      console.log(
-        "Wake listener heard:",
-        transcript
-      );
+      console.log("ATLAS WAKE HEARD:", transcript);
 
-      if (
-        transcript.includes(
-          "hey atlas"
-        ) ||
-        transcript.includes(
-          "hello"
-        ) ||
-        transcript.includes(
-          "hello atlas"
-        ) ||
-        transcript.includes(
-          "hey at last"
-        ) ||
-        transcript.includes(
-          "hey atlas 3k"
-        ) ||
-        transcript.includes(
-          "okay atlas"
-        ) ||
-        transcript.includes(
-          "okay at least"
-        ) ||
-        transcript.includes(
-          "ok atlas"
-        )
-      ) {
-        console.log(
-          "ATLAS WAKE WORD DETECTED"
-        );
+      const wakeDetected =
+        transcript.includes("hey atlas") ||
+        transcript.includes("hello atlas") ||
+        transcript.includes("hello") ||
+        transcript.includes("hey at last") ||
+        transcript.includes("hey atlas 3k") ||
+        transcript.includes("okay atlas") ||
+        transcript.includes("okay at least") ||
+        transcript.includes("ok atlas");
 
-        wakeWordTriggered = true;
+      if (!wakeDetected) return;
 
-        // Set this BEFORE stopping the recognizer so its onend
-        // handler (which fires async) doesn't race and spin up
-        // a second wake-word listener while we're about to open
-        // the question listener.
-        isProcessingRef.current = true;
+      console.log("ATLAS WAKE WORD DETECTED", sessionId);
 
+      wakeWordTriggered = true;
+      intentionallyStopped = true;
+      isProcessingRef.current = true;
+
+      setStatus("WAKE WORD DETECTED");
+
+      try {
         recognition.stop();
-
-        wakeWordRecognitionRef.current =
-          null;
-
-        setStatus(
-          "WAKE WORD DETECTED"
-        );
-
-        setTimeout(() => {
-          startQuestionListening();
-        }, 400);
+      } catch (error) {
+        console.log("ATLAS wake stop:", error);
       }
     };
 
-    recognition.onerror = (
-      event
-    ) => {
-      console.log(
-        "Wake word error:",
-        event.error
-      );
+    recognition.onerror = (event) => {
+      console.log("ATLAS: wake recognition error", sessionId, event.error);
 
-      wakeWordRecognitionRef.current =
-        null;
+      // CRITICAL FIX:
+      // Do NOT clear the ref and restart from onerror. Chrome fires
+      // "aborted" followed by onend; restarting from both callbacks
+      // creates multiple recognizers fighting over the microphone.
+      if (event.error === "aborted") {
+        console.log("ATLAS: wake session aborted by browser", sessionId);
+        return;
+      }
 
-      if (
-        event.error ===
-        "not-allowed"
-      ) {
-        setStatus(
-          "MICROPHONE ACCESS DENIED"
-        );
+      if (event.error === "not-allowed") {
+        wakeWordRecognitionRef.current = null;
+        isProcessingRef.current = false;
+        setStatus("MICROPHONE ACCESS DENIED");
+        return;
+      }
+
+      console.log("ATLAS: wake error will be handled by onend", event.error);
+    };
+
+    recognition.onend = () => {
+      console.log("ATLAS: WAKE LISTENER ENDED", sessionId);
+
+      // Only the current session may clear the current recognizer ref.
+      if (wakeWordRecognitionRef.current === recognition) {
+        wakeWordRecognitionRef.current = null;
+      }
+
+      // Wake word was actually heard: hand off to the question listener.
+      if (wakeWordTriggered) {
+        console.log("ATLAS: STARTING QUESTION LISTENER", sessionId);
+
+        setTimeout(() => {
+          if (sessionId !== wakeSessionIdRef.current) return;
+          startQuestionListening();
+        }, 350);
 
         return;
       }
 
-      if (
-        !isProcessingRef.current &&
-        !showMusicRef.current &&
-        !showWeatherRef.current
-      ) {
-        setTimeout(() => {
-          startWakeWordDetection();
-        }, 500);
+      if (intentionallyStopped) return;
+      if (isProcessingRef.current) return;
+      if (showMusicRef.current || showWeatherRef.current || showMathRef.current) {
+        return;
       }
+
+      // SINGLE restart path. Never restart from onerror.
+      if (wakeRestartTimerRef.current) return;
+
+      wakeRestartTimerRef.current = setTimeout(() => {
+        wakeRestartTimerRef.current = null;
+
+        if (
+          !wakeWordRecognitionRef.current &&
+          !recognitionRef.current &&
+          !isProcessingRef.current &&
+          !showMusicRef.current &&
+          !showWeatherRef.current &&
+          !showMathRef.current
+        ) {
+          startWakeWordDetection();
+        }
+      }, 700);
     };
 
-    recognition.onend = () => {
-      wakeWordRecognitionRef.current =
-        null;
-
-      if (
-        !isProcessingRef.current &&
-        !showMusicRef.current &&
-        !showWeatherRef.current
-      ) {
-        setTimeout(() => {
-          startWakeWordDetection();
-        }, 300);
-      }
-    };
-
-    wakeWordRecognitionRef.current =
-      recognition;
+    wakeWordRecognitionRef.current = recognition;
 
     try {
       recognition.start();
+      console.log("ATLAS: WAKE RECOGNITION STARTED REQUEST", sessionId);
     } catch (error) {
-      console.log(
-        "Wake recognition start error:",
-        error
-      );
+      console.log("ATLAS WAKE START ERROR:", error);
+
+      if (wakeWordRecognitionRef.current === recognition) {
+        wakeWordRecognitionRef.current = null;
+      }
+
+      if (!wakeRestartTimerRef.current) {
+        wakeRestartTimerRef.current = setTimeout(() => {
+          wakeRestartTimerRef.current = null;
+          startWakeWordDetection();
+        }, 1000);
+      }
     }
   };
 
@@ -1336,6 +1272,11 @@ const handleMathCommand = (question) => {
 
     return () => {
       clearTimeout(bootTimer);
+
+      if (wakeRestartTimerRef.current) {
+        clearTimeout(wakeRestartTimerRef.current);
+        wakeRestartTimerRef.current = null;
+      }
 
       window.speechSynthesis.cancel();
 
@@ -1842,36 +1783,11 @@ const handleMathCommand = (question) => {
               </div>
             </aside>
 
-            <section className="center">
-              <div className="radar-sweep" />
-
-              <div
-                className={`ai-core ${
-                  listening
-                    ? "listening"
-                    : speaking
-                      ? "speaking"
-                      : ""
-                }`}
-              >
-                <div className="ai-aura aura-1"></div>
-
-                <div className="ai-aura aura-2"></div>
-
-                <div className="ai-aura aura-3"></div>
-
-                <div className="ai-orb">
-                  <div className="orb-light"></div>
-
-                  <div className="orb-surface surface-1"></div>
-
-                  <div className="orb-surface surface-2"></div>
-
-                  <div className="orb-surface surface-3"></div>
-
-                  <div className="orb-core"></div>
-                </div>
-              </div>
+            <section className="dashboard-center">
+              <AtlasGlobe
+                listening={listening}
+                speaking={speaking}
+              />
 
               <div className="voice-status">
                 {status}
@@ -1882,29 +1798,43 @@ const handleMathCommand = (question) => {
                   <span className="subtitle-label">
                     YOU
                   </span>
-
                   {userText}
                 </div>
               )}
 
-              <div
+              <button
+                type="button"
                 className={`mic-button ${
-                  listening
-                    ? "mic-active"
-                    : ""
+                  listening ? "listening" : ""
                 }`}
+                onClick={() => {
+                  if (listening) {
+                    try {
+                      recognitionRef.current?.stop();
+                    } catch (error) {
+                      console.log("ATLAS mic stop:", error);
+                    }
+                    return;
+                  }
+
+                  if (
+                    !isProcessingRef.current &&
+                    !showMusicRef.current &&
+                    !showWeatherRef.current &&
+                    !showMathRef.current
+                  ) {
+                    startQuestionListening();
+                  }
+                }}
+                aria-label="Voice microphone"
               >
-                <span>
-                  {listening
-                    ? "■"
-                    : "●"}
-                </span>
-              </div>
+                <span>{listening ? "■" : "●"}</span>
+              </button>
 
               <div className="voice-hint">
                 {listening
                   ? "LISTENING..."
-                  : 'SAY "OK ATLAS or Hello"'}
+                  : 'SAY "OK ATLAS" OR "HELLO"'}
               </div>
             </section>
 
