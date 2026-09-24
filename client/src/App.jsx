@@ -439,67 +439,131 @@ function App() {
     return true;
   };
 
-  // =========================================================
-  // LOCAL MATH CORE — ZERO AI/API REQUESTS
-  // =========================================================
+// =========================================================
+// LOCAL MATH CORE — ZERO AI/API REQUESTS
+// =========================================================
 
-  const handleMathCommand = (question) => {
-    // Never let a detected math request fall through to the AI API.
-    if (!isMathQuestion(question)) {
-      return false;
+const handleMathCommand = (question) => {
+  const q = String(question || "").toLowerCase().trim();
+
+  // HARD LOCAL MATH DETECTION
+  // This intentionally lives in App.jsx so math can NEVER
+  // accidentally fall through to askAtlas()/API.
+  const localMath =
+    isMathQuestion(q) ||
+    /\bsquare\s+root\b/.test(q) ||
+    /\bsqrt\b/.test(q) ||
+    /\bcube\s+root\b/.test(q) ||
+    /\bcalculate\b/.test(q) ||
+    /\bcompute\b/.test(q) ||
+    /\bsolve\b/.test(q) ||
+    /\bevaluate\b/.test(q) ||
+    /\bwhat\s+is\b.*\d/.test(q) ||
+    /\bplus\b|\bminus\b|\btimes\b|\bdivided\s+by\b/.test(q) ||
+    /\bpercent\b|%/.test(q) ||
+    /\bsquared\b|\bcubed\b/.test(q) ||
+    /\bpower\b/.test(q) ||
+    /\bsin\b|\bsine\b|\bcos\b|\bcosine\b|\btan\b|\btangent\b/.test(q);
+
+  if (!localMath) {
+    return false;
+  }
+
+  console.log("========================================");
+  console.log("ATLAS: LOCAL MATH ROUTE");
+  console.log("Question:", question);
+  console.log("Calling MathJS — NO API");
+  console.log("========================================");
+
+  try {
+    const result = solveMath(question);
+
+    if (!result) {
+      throw new Error(
+        "MathJS returned no result for this expression."
+      );
     }
 
-    try {
-      console.log("ATLAS: LOCAL MATH ENGINE → MathJS");
-      const result = solveMath(question);
-      setMathResult(result);
-      setShowMath(true);
-      setUserText(question);
-      setAiText("");
-      setResult(null);
-      setShowResults(false);
-      setStatus("MATH CORE ACTIVE");
-      isProcessingRef.current = true;
+    console.log("ATLAS: MATHJS RESULT:", result);
 
-      const spoken = result.type === "calculation"
-        ? `The answer is ${result.value}.`
-        : result.type === "equation"
-          ? (result.solutions?.length
-              ? `The solution is ${result.solutions.map((v) => `${result.variable} equals ${v}`).join(" and ")}.`
-              : "I could not find a real solution in my numerical range.")
-          : result.type === "derivative"
-            ? `The derivative is ${result.derivative}.`
-            : result.type === "integral"
-              ? `The integral result is ${result.value != null ? result.value : result.antiderivative}.`
-              : result.type === "conversion"
-                ? `The converted value is ${result.result} ${result.to}.`
-                : "The mathematical analysis is complete.";
-      setTimeout(() => speak(spoken), 80);
+    setMathResult(result);
+    setShowMath(true);
 
-      return true;
-    } catch (error) {
-      console.error("ATLAS MATH ERROR:", error);
-      // IMPORTANT: once a request is classified as math, NEVER fall through
-      // to askAtlas()/OpenRouter. Show the local engine error instead.
-      setMathResult({
-        type: "calculation",
-        title: "MATH CORE ERROR",
-        expression: question,
-        value: null,
-        error: error?.message || "Unable to solve this expression locally.",
-        engine: "MathJS LOCAL ENGINE",
-      });
-      setShowMath(true);
-      setUserText(question);
-      setAiText("");
-      setResult(null);
-      setShowResults(false);
-      setStatus("MATH CORE — LOCAL ONLY");
-      isProcessingRef.current = true;
-      setTimeout(() => speak("I could not solve that locally. No AI request was sent."), 80);
-      return true;
-    }
-  };
+    setUserText(question);
+    setAiText("");
+
+    setResult(null);
+    setShowResults(false);
+
+    setStatus("MATH CORE ACTIVE");
+
+    // IMPORTANT:
+    // This keeps the request inside the local math system.
+    isProcessingRef.current = true;
+
+    const spoken =
+      result.type === "equation" && result.solutions
+        ? (
+            result.solutions.length
+              ? `The solution is ${result.solutions
+                  .map(
+                    (v) =>
+                      `${result.variable || "x"} equals ${v}`
+                  )
+                  .join(" and ")}.`
+              : "I could not find a real solution."
+          )
+        : result.result
+          ? `The answer is ${result.result}.`
+          : "The mathematical analysis is complete.";
+
+    setTimeout(() => {
+      speak(spoken);
+    }, 80);
+
+    return true;
+
+  } catch (error) {
+    console.error("ATLAS LOCAL MATH ERROR:", error);
+
+    setMathResult({
+      type: "calculation",
+      title: "MATH CORE ERROR",
+      expression: question,
+      result: "Could not solve locally",
+      steps: [
+        `Expression received: ${question}`,
+        error?.message ||
+          "MathJS could not evaluate this expression."
+      ],
+      numericResult: null,
+      engine: "MathJS LOCAL ENGINE"
+    });
+
+    setShowMath(true);
+
+    setUserText(question);
+    setAiText("");
+
+    setResult(null);
+    setShowResults(false);
+
+    setStatus("MATH CORE — LOCAL ONLY");
+
+    isProcessingRef.current = true;
+
+    setTimeout(() => {
+      speak(
+        "I could not solve that locally. No AI request was sent."
+      );
+    }, 80);
+
+    // CRITICAL
+    // Even if MathJS fails, return TRUE.
+    // This prevents askAtlas() from ever being called.
+    return true;
+  }
+};
 
   // =========================================================
   // ASK ATLAS
