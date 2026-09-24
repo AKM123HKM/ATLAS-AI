@@ -449,22 +449,38 @@ export default function MusicPlayer({ onClose, songToPlay }) {
 
         <div className="music-body">
           <div className="album-section">
-            <div className={`album-orb ${playing ? "album-playing" : ""}`}>
-              {currentSong?.thumbnail ? (
-                <img
-                  className="album-thumb"
-                  src={currentSong.thumbnail}
-                  alt={currentSong.title}
-                />
-              ) : (
-                <div className="album-core">♪</div>
-              )}
+            <div className="album-orb-wrap">
+              <div className="album-ring" />
+
+              <div className={`album-orb ${playing ? "album-playing" : ""}`}>
+                {currentSong?.thumbnail ? (
+                  <img
+                    className="album-thumb"
+                    src={currentSong.thumbnail}
+                    alt={currentSong.title}
+                  />
+                ) : (
+                  <div className="album-core">♪</div>
+                )}
+              </div>
             </div>
 
             {currentSong ? (
               <>
                 <h3>{currentSong.title}</h3>
                 <p>{currentSong.artist}</p>
+
+                {playing && (
+                  <div className="equalizer" aria-hidden="true">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <span
+                        key={i}
+                        className="eq-bar"
+                        style={{ animationDelay: `${i * 0.08}s` }}
+                      />
+                    ))}
+                  </div>
+                )}
               </>
             ) : loadingSearch ? (
               <>
@@ -559,6 +575,8 @@ export default function MusicPlayer({ onClose, songToPlay }) {
                     <small>{song.artist}</small>
                   </span>
 
+                  <span className="song-badge song-badge-local">LOCAL</span>
+
                   <span className="song-arrow">→</span>
                 </button>
               ))}
@@ -599,6 +617,8 @@ export default function MusicPlayer({ onClose, songToPlay }) {
                         <strong>{video.title}</strong>
                         <small>{video.channel}</small>
                       </span>
+
+                      <span className="song-badge song-badge-online">YT</span>
 
                       <span className="song-arrow">→</span>
                     </button>

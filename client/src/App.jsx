@@ -115,6 +115,38 @@ function HudFrame() {
 }
 
 // =========================================================
+// LIVE CLOCK (topbar date/time readout)
+// =========================================================
+
+function LiveClock() {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const dateStr = now.toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  });
+
+  const timeStr = now.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  return (
+    <div className="topbar-clock">
+      <span className="clock-date">{dateStr}</span>
+      <span className="clock-time">{timeStr}</span>
+    </div>
+  );
+}
+
+// =========================================================
 // APPROXIMATE LOCATION VIA IP (fallback when GPS/geolocation
 // permission is denied or unavailable)
 // =========================================================
@@ -193,6 +225,32 @@ function App() {
 
   const speechQueueRef = useRef([]);
   const speechIndexRef = useRef(0);
+
+  // =========================================================
+  // LIVE FEED LOG (right panel) — a running record of what
+  // ATLAS has actually handled, purely visual, no functional
+  // impact on routing.
+  // =========================================================
+
+  const [interactionLog, setInteractionLog] = useState([]);
+
+  const logInteraction = (label) => {
+    setInteractionLog((prev) => {
+      const entry = {
+        id: Date.now() + Math.random(),
+        label:
+          label.length > 46
+            ? label.slice(0, 46) + "…"
+            : label,
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      };
+
+      return [entry, ...prev].slice(0, 6);
+    });
+  };
 
   // =========================================================
   // LOCAL ATLAS KNOWLEDGE
@@ -427,12 +485,6 @@ function App() {
       ? null
       : command;
 
-    // Any "play ..." request now opens the music system. MusicPlayer
-    // checks the local library first, then falls back to an online
-    // (YouTube) search for anything not bundled locally — so this no
-    // longer needs to pre-match aliases here or silently fall through
-    // to the general AI chat when the song isn't one of the 3 local
-    // files.
     isProcessingRef.current = true;
 
     setSongToPlay(cleanedCommand);
@@ -452,7 +504,6 @@ function App() {
   // =========================================================
 
   const handleMathCommand = (question) => {
-    // Never let a detected math request fall through to the AI API.
     if (!isMathQuestion(question)) {
       return false;
     }
@@ -461,14 +512,6 @@ function App() {
       console.log("ATLAS: LOCAL MATH ENGINE → MathJS");
       const result = solveMath(question);
 
-      // FIX: solveMath() can return null (e.g. an unparseable
-      // expression that hits an edge case). Previously the code
-      // read result.type immediately below, which threw
-      // "Cannot read properties of null (reading 'type')" and
-      // crashed out of this handler entirely. Guard it here so the
-      // error path always runs instead, even as a second safety
-      // net on top of the mathEngine.js fix that stopped it from
-      // returning null in the first place.
       if (!result) {
         throw new Error("Unable to parse this expression locally.");
       }
@@ -482,14 +525,6 @@ function App() {
       setStatus("MATH CORE ACTIVE");
       isProcessingRef.current = true;
 
-      // FIX: previously this read result.value / result.derivative,
-      // which mathEngine.js never actually sets (it returns
-      // result.result and result.numericResult), so most answers
-      // spoke "undefined". mathEngine.js now always sets
-      // result.result to a display-ready string for every type, so
-      // using that directly is both correct and future-proof for
-      // any new answer type added there (mensuration, trig, etc.)
-      // without needing a matching change here every time.
       const spoken =
         result.type === "equation" && result.solutions
           ? (result.solutions.length
@@ -505,8 +540,6 @@ function App() {
       return true;
     } catch (error) {
       console.error("ATLAS MATH ERROR:", error);
-      // IMPORTANT: once a request is classified as math, NEVER fall through
-      // to askAtlas()/OpenRouter. Show the local engine error instead.
       setMathResult({
         type: "calculation",
         title: "MATH CORE ERROR",
@@ -534,10 +567,6 @@ function App() {
   const askAtlas = async (question) => {
     const localAnswer = getLocalAnswer(question);
 
-    // -------------------------------------------------------
-    // SPECIAL LOCAL COMMANDS
-    // -------------------------------------------------------
-
     if (localAnswer?.type === "music") {
       console.log("ATLAS: MUSIC COMMAND");
 
@@ -560,19 +589,11 @@ function App() {
       };
     }
 
-    // -------------------------------------------------------
-    // NORMAL LOCAL KNOWLEDGE
-    // -------------------------------------------------------
-
     if (localAnswer) {
       console.log("ATLAS: LOCAL RESPONSE");
 
       return localAnswer;
     }
-
-    // -------------------------------------------------------
-    // UNKNOWN QUESTION -> API
-    // -------------------------------------------------------
 
     console.log("ATLAS: API REQUEST");
 
@@ -634,7 +655,6 @@ function App() {
 
   const speak = (text) => {
     if (!text || !text.trim()) {
-      // Nothing to say — don't leave the mic permanently locked.
       isProcessingRef.current = false;
 
       if (
@@ -709,19 +729,14 @@ function App() {
     if (index >= queue.length) {
       setSpeaking(false);
 
-      // Do not restart wake-word detection
-      // while music player is open.
       if (showMusicRef.current) {
         return;
       }
 
-      // Do not restart wake-word detection
-      // while weather dialog is open.
       if (showWeatherRef.current) {
         return;
       }
 
-      // Do not restart wake-word detection while math is open.
       if (showMathRef.current) {
         return;
       }
@@ -788,15 +803,11 @@ function App() {
   ) => {
     if (!question.trim()) return;
 
-    // =======================================================
-    // WEATHER COMMAND
-    // =======================================================
+    logInteraction(question);
 
     const lowerQuestion =
       question.toLowerCase().trim();
 
-    // Math is handled entirely locally. It must run before weather/music/LLM
-    // so calculations never consume an AI request.
     if (handleMathCommand(question)) {
       return;
     }
@@ -810,10 +821,6 @@ function App() {
         "ATLAS: WEATHER COMMAND"
       );
 
-      // Only extract a location when a connector word is present
-      // ("weather in Delhi", "weather for Mumbai"). Without it,
-      // ATLAS falls back to the device's current location instead
-      // of misreading a stray word as a city name.
       const locationMatch =
         lowerQuestion.match(
           /(?:weather|climate|temperature)\s+(?:in|for|at|of)\s+([a-zA-Z\s]+?)(?:\s+today|\s+tomorrow|\s+right now|\s+now)?$/i
@@ -839,7 +846,6 @@ function App() {
 
       setStatus("WEATHER SYSTEM");
 
-      // Prevent OpenRouter/API request
       isProcessingRef.current = true;
 
       if (location) {
@@ -908,10 +914,6 @@ function App() {
       return;
     }
 
-    // =======================================================
-    // MUSIC COMMAND
-    // =======================================================
-
     if (
       handleMusicCommand(question)
     ) {
@@ -921,13 +923,8 @@ function App() {
         "Opening local music library."
       );
 
-      // Do NOT call speak() here.
       return;
     }
-
-    // =======================================================
-    // NORMAL QUESTION
-    // =======================================================
 
     setUserText(question);
 
@@ -962,8 +959,6 @@ function App() {
   // WAKE WORD DETECTION
   // =========================================================
 
-  // IMPORTANT: keep the original continuous wake listener. The UI/globe
-  // must never create competing SpeechRecognition sessions.
   const startWakeWordDetection = () => {
     if (showMusicRef.current) return;
     if (showWeatherRef.current) return;
@@ -979,12 +974,10 @@ function App() {
       return;
     }
 
-    // ONE wake recognizer at a time.
     if (wakeWordRecognitionRef.current || recognitionRef.current) {
       return;
     }
 
-    // ONE pending restart at a time.
     if (wakeRestartTimerRef.current) {
       return;
     }
@@ -1051,10 +1044,6 @@ function App() {
     recognition.onerror = (event) => {
       console.log("ATLAS: wake recognition error", sessionId, event.error);
 
-      // CRITICAL FIX:
-      // Do NOT clear the ref and restart from onerror. Chrome fires
-      // "aborted" followed by onend; restarting from both callbacks
-      // creates multiple recognizers fighting over the microphone.
       if (event.error === "aborted") {
         console.log("ATLAS: wake session aborted by browser", sessionId);
         return;
@@ -1073,12 +1062,10 @@ function App() {
     recognition.onend = () => {
       console.log("ATLAS: WAKE LISTENER ENDED", sessionId);
 
-      // Only the current session may clear the current recognizer ref.
       if (wakeWordRecognitionRef.current === recognition) {
         wakeWordRecognitionRef.current = null;
       }
 
-      // Wake word was actually heard: hand off to the question listener.
       if (wakeWordTriggered) {
         console.log("ATLAS: STARTING QUESTION LISTENER", sessionId);
 
@@ -1096,7 +1083,6 @@ function App() {
         return;
       }
 
-      // SINGLE restart path. Never restart from onerror.
       if (wakeRestartTimerRef.current) return;
 
       wakeRestartTimerRef.current = setTimeout(() => {
@@ -1349,10 +1335,6 @@ function App() {
 
       <HudFrame />
 
-      {/* ===================================================
-          MUSIC PLAYER
-      =================================================== */}
-
       {showMusic && (
         <MusicPlayer
           songToPlay={songToPlay}
@@ -1374,10 +1356,6 @@ function App() {
           }}
         />
       )}
-
-      {/* ===================================================
-          WEATHER DIALOG
-      =================================================== */}
 
       {showWeather && (
         <WeatherDialog
@@ -1415,10 +1393,6 @@ function App() {
           }}
         />
       )}
-
-      {/* ===================================================
-          RESULTS SCREEN
-      =================================================== */}
 
       {showResults && result ? (
         <>
@@ -1683,10 +1657,6 @@ function App() {
           </footer>
         </>
       ) : (
-        /* =================================================
-           MAIN ATLAS DASHBOARD
-        ================================================= */
-
         <>
           <header className="topbar">
             <div className="system-status">
@@ -1698,6 +1668,8 @@ function App() {
               A.T.L.A.S{" "}
               <span>3K</span>
             </div>
+
+            <LiveClock />
 
             <div className="version">
               V1.0 // VOICE CORE
@@ -1767,19 +1739,70 @@ function App() {
                 </div>
               </div>
 
-              <div className="panel">
+              <div className="panel quick-panel">
                 <div className="panel-title">
-                  SYSTEM INFORMATION
+                  QUICK COMMANDS
                 </div>
 
-                <p className="info">
-                  A.T.L.A.S 3K is an
-                  experimental
-                  voice-based
-                  artificial
-                  intelligence
-                  assistant.
-                </p>
+                <div className="quick-grid">
+                  <button
+                    type="button"
+                    className="quick-btn"
+                    onClick={() => {
+                      if (
+                        !isProcessingRef.current &&
+                        !listening &&
+                        !showMusicRef.current &&
+                        !showWeatherRef.current &&
+                        !showMathRef.current
+                      ) {
+                        startQuestionListening();
+                      }
+                    }}
+                  >
+                    <span className="quick-btn-dot" />
+                    ASK A QUESTION
+                  </button>
+
+                  <button
+                    type="button"
+                    className="quick-btn"
+                    onClick={() => {
+                      if (!isProcessingRef.current) {
+                        processQuestion("what's the weather");
+                      }
+                    }}
+                  >
+                    <span className="quick-btn-dot" />
+                    CHECK WEATHER
+                  </button>
+
+                  <button
+                    type="button"
+                    className="quick-btn"
+                    onClick={() => {
+                      if (!isProcessingRef.current) {
+                        processQuestion("play a song");
+                      }
+                    }}
+                  >
+                    <span className="quick-btn-dot" />
+                    PLAY MUSIC
+                  </button>
+
+                  <button
+                    type="button"
+                    className="quick-btn"
+                    onClick={() => {
+                      if (!isProcessingRef.current) {
+                        processQuestion("what is 18 times 24");
+                      }
+                    }}
+                  >
+                    <span className="quick-btn-dot" />
+                    SOLVE MATH
+                  </button>
+                </div>
               </div>
             </aside>
 
@@ -1802,64 +1825,105 @@ function App() {
                 </div>
               )}
 
-              <button
-                type="button"
-                className={`mic-button ${
-                  listening ? "listening" : ""
-                }`}
-                onClick={() => {
-                  if (listening) {
-                    try {
-                      recognitionRef.current?.stop();
-                    } catch (error) {
-                      console.log("ATLAS mic stop:", error);
+              <div className="talk-bar">
+                <div className="talk-bar-track">
+                  {Array.from({ length: 18 }).map((_, i) => (
+                    <span
+                      key={`l-${i}`}
+                      className="talk-bar-wave"
+                      style={{ animationDelay: `${i * 0.06}s` }}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  className={`talk-bar-btn ${
+                    listening ? "listening" : ""
+                  }`}
+                  onClick={() => {
+                    if (listening) {
+                      try {
+                        recognitionRef.current?.stop();
+                      } catch (error) {
+                        console.log("ATLAS mic stop:", error);
+                      }
+                      return;
                     }
-                    return;
-                  }
 
-                  if (
-                    !isProcessingRef.current &&
-                    !showMusicRef.current &&
-                    !showWeatherRef.current &&
-                    !showMathRef.current
-                  ) {
-                    startQuestionListening();
-                  }
-                }}
-                aria-label="Voice microphone"
-              >
-                <span>{listening ? "■" : "●"}</span>
-              </button>
+                    if (
+                      !isProcessingRef.current &&
+                      !showMusicRef.current &&
+                      !showWeatherRef.current &&
+                      !showMathRef.current
+                    ) {
+                      startQuestionListening();
+                    }
+                  }}
+                  aria-label="Voice microphone"
+                >
+                  <span className="talk-bar-icon">
+                    {listening ? "■" : "●"}
+                  </span>
+                  <span className="talk-bar-text">
+                    {listening
+                      ? "Listening..."
+                      : 'Tap to speak · say "Hello"'}
+                  </span>
+                </button>
 
-              <div className="voice-hint">
-                {listening
-                  ? "LISTENING..."
-                  : 'SAY "OK ATLAS" OR "HELLO"'}
+                <div className="talk-bar-track">
+                  {Array.from({ length: 18 }).map((_, i) => (
+                    <span
+                      key={`r-${i}`}
+                      className="talk-bar-wave"
+                      style={{ animationDelay: `${i * 0.06}s` }}
+                    />
+                  ))}
+                </div>
               </div>
             </section>
 
             <aside className="right-panel">
               <div className="panel response-panel">
                 <div className="panel-title">
-                  INTELLIGENCE OUTPUT
+                  LIVE FEED
                 </div>
 
-                <div className="waiting">
-                  <div className="waiting-symbol">
-                    ◈
+                {interactionLog.length === 0 ? (
+                  <div className="waiting">
+                    <div className="waiting-symbol">
+                      ◈
+                    </div>
+
+                    <p>
+                      A.T.L.A.S is
+                      waiting for your
+                      command.
+                    </p>
+
+                    <small>
+                      Say "Hey Atlas" to
+                      begin.
+                    </small>
                   </div>
-
-                  <p>
-                    A.T.L.A.S is
-                    waiting for your
-                    command.
-                  </p>
-
-                  <small>
-                    Say "Hey Atlas" to
-                    begin.
-                  </small>
-                </div>
+                ) : (
+                  <div className="feed-list">
+                    {interactionLog.map((entry) => (
+                      <div className="feed-item" key={entry.id}>
+                        <span className="feed-dot" />
+                        <div className="feed-body">
+                          <span className="feed-label">
+                            {entry.label}
+                          </span>
+                          <span className="feed-time">
+                            {entry.time}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </aside>
           </main>

@@ -1679,3 +1679,719 @@ footer::before {
     min-height: 450px;
   }
 }
+
+/* =========================================================
+   ATLAS 3K — HUD DEPTH PASS
+   Fixes broken selectors + adds visual weight.
+   Does NOT touch .center / .dashboard-center / canvas / globe.
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   1. FIX: corner brackets were completely unstyled because
+   the CSS expected two classes ("hud-corner" + "top-left")
+   but the JSX only ever renders one hyphenated class
+   ("hud-corner-tl" etc). This replaces the dead .top-left /
+   .top-right / .bottom-left / .bottom-right rules.
+   --------------------------------------------------------- */
+
+.hud-corner {
+  position: fixed;
+  width: 46px;
+  height: 46px;
+  pointer-events: none;
+  opacity: 0.9;
+  z-index: 6;
+}
+
+.hud-corner::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(77, 232, 255, 0.18);
+}
+
+.hud-corner-tl {
+  top: 20px;
+  left: 20px;
+  border-left: 2px solid var(--atlas-cyan);
+  border-top: 2px solid var(--atlas-cyan);
+  box-shadow: -2px -2px 14px rgba(77, 232, 255, 0.25);
+}
+
+.hud-corner-tr {
+  top: 20px;
+  right: 20px;
+  border-right: 2px solid var(--atlas-cyan);
+  border-top: 2px solid var(--atlas-cyan);
+  box-shadow: 2px -2px 14px rgba(77, 232, 255, 0.25);
+}
+
+.hud-corner-bl {
+  bottom: 20px;
+  left: 20px;
+  border-left: 2px solid var(--atlas-cyan);
+  border-bottom: 2px solid var(--atlas-cyan);
+  box-shadow: -2px 2px 14px rgba(77, 232, 255, 0.25);
+}
+
+.hud-corner-br {
+  bottom: 20px;
+  right: 20px;
+  border-right: 2px solid var(--atlas-cyan);
+  border-bottom: 2px solid var(--atlas-cyan);
+  box-shadow: 2px 2px 14px rgba(77, 232, 255, 0.25);
+}
+
+/* Give the previously-dead .hud-scanlines div an actual job:
+   a slow vertical sweep bar, classic HUD radar-scan motif. */
+
+.hud-scanlines {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  overflow: hidden;
+}
+
+.hud-scanlines::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 120px;
+  top: -120px;
+
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(77, 232, 255, 0.05),
+    rgba(77, 232, 255, 0.09),
+    rgba(77, 232, 255, 0.05),
+    transparent
+  );
+
+  animation: hudSweep 7s linear infinite;
+}
+
+@keyframes hudSweep {
+  0% {
+    top: -120px;
+  }
+  100% {
+    top: 100%;
+  }
+}
+
+/* ---------------------------------------------------------
+   2. FIX: .panel / .brand-panel / .status-row / .info /
+   .response-panel / .waiting were never defined in this
+   file, so they were rendering as plain unstyled boxes.
+   --------------------------------------------------------- */
+
+.panel {
+  position: relative;
+
+  padding: 20px 22px;
+
+  background: linear-gradient(
+    150deg,
+    rgba(8, 23, 34, 0.78),
+    rgba(2, 10, 17, 0.6)
+  );
+
+  border: 1px solid var(--hud-border);
+  border-radius: 2px;
+
+  box-shadow:
+    var(--hud-shadow),
+    0 10px 32px rgba(0, 0, 0, 0.32);
+
+  backdrop-filter: blur(14px);
+
+  margin-bottom: 16px;
+
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.panel:last-child {
+  margin-bottom: 0;
+}
+
+.panel:hover {
+  border-color: var(--hud-border-bright);
+  box-shadow:
+    0 0 28px rgba(77, 232, 255, 0.08),
+    inset 0 0 24px rgba(77, 232, 255, 0.03);
+}
+
+/* thin accent tick on the left edge of every panel — cheap
+   detail that reads as "designed", not default */
+.panel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--atlas-cyan),
+    transparent
+  );
+  opacity: 0.55;
+}
+
+.panel .panel-title {
+  display: block;
+  margin-bottom: 14px;
+}
+
+/* -------------------- BRAND PANEL -------------------- */
+
+.brand-panel {
+  text-align: center;
+  padding: 26px 18px;
+}
+
+.brand-panel::before {
+  display: none;
+}
+
+.brand-panel small {
+  display: block;
+
+  font-size: 8px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+
+  color: var(--hud-text-dim);
+}
+
+.brand-panel h2 {
+  margin: 10px 0 6px;
+
+  font-size: 26px;
+  font-weight: 200;
+  letter-spacing: 0.16em;
+
+  color: var(--hud-text);
+
+  text-shadow: 0 0 18px rgba(77, 232, 255, 0.25);
+}
+
+.brand-panel h2 span {
+  color: var(--atlas-cyan);
+  text-shadow: 0 0 16px rgba(77, 232, 255, 0.55);
+}
+
+/* -------------------- STATUS ROWS -------------------- */
+
+.status-row {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 9px 0;
+
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+
+  color: var(--hud-text-dim);
+
+  border-bottom: 1px solid rgba(77, 232, 255, 0.07);
+}
+
+.status-row:last-child {
+  border-bottom: none;
+}
+
+.status-row span {
+  color: var(--hud-text-soft);
+}
+
+.status-row b {
+  position: relative;
+
+  padding-left: 14px;
+
+  font-family: monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+
+  color: var(--atlas-cyan);
+
+  text-shadow: 0 0 10px rgba(77, 232, 255, 0.35);
+}
+
+/* live-indicator dot before every status value */
+.status-row b::before {
+  content: "";
+
+  position: absolute;
+  left: 0;
+  top: 50%;
+
+  width: 5px;
+  height: 5px;
+
+  transform: translateY(-50%);
+
+  border-radius: 50%;
+
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+/* -------------------- INFO TEXT -------------------- */
+
+.info {
+  font-size: 11px;
+  line-height: 1.8;
+  letter-spacing: 0.02em;
+
+  color: var(--hud-text-soft);
+}
+
+/* -------------------- RIGHT PANEL / WAITING STATE -------------------- */
+
+.response-panel {
+  min-height: 260px;
+
+  display: flex;
+  flex-direction: column;
+}
+
+.waiting {
+  flex: 1;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  text-align: center;
+
+  gap: 10px;
+
+  padding: 30px 10px;
+}
+
+.waiting-symbol {
+  width: 42px;
+  height: 42px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  border: 1px solid rgba(77, 232, 255, 0.3);
+
+  font-size: 18px;
+  color: var(--atlas-cyan);
+
+  box-shadow:
+    0 0 18px rgba(77, 232, 255, 0.15),
+    inset 0 0 14px rgba(77, 232, 255, 0.08);
+
+  animation: waitingSpin 3.5s linear infinite,
+             statusPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes waitingSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.waiting p {
+  margin: 0;
+
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  line-height: 1.6;
+
+  color: var(--hud-text-soft);
+
+  max-width: 220px;
+}
+
+.waiting small {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+
+  color: var(--hud-text-dim);
+}
+
+/* ---------------------------------------------------------
+   3. Overall depth boost — stronger vignette + faint noise
+   so the frame doesn't feel like a flat dark rectangle.
+   Purely additive, sits behind everything (.center excluded).
+   --------------------------------------------------------- */
+
+.app {
+  box-shadow:
+    inset 0 0 160px rgba(0, 0, 0, 0.55),
+    inset 0 0 60px rgba(77, 232, 255, 0.02);
+}
+
+/* subtle animated ambient glow drifting behind the side
+   panels only — kept far away from .dashboard-center so it
+   never interferes with the globe */
+
+.left-panel::before,
+.right-panel::before {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  z-index: -1;
+
+  background: radial-gradient(
+    circle,
+    rgba(77, 232, 255, 0.05),
+    transparent 70%
+  );
+
+  animation: ambientDrift 9s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.right-panel::before {
+  animation-delay: 3s;
+}
+
+@keyframes ambientDrift {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
+}
+
+
+/* =========================================================
+   ATLAS 3K — COMMAND CENTER PASS 2
+   Clock, quick commands, live feed, pill talk bar.
+   Still does not touch .center / .dashboard-center canvas
+   sizing or the globe component itself.
+   ========================================================= */
+
+/* -------------------- TOPBAR: SYSTEM STATUS PILL -------------------- */
+
+.system-status {
+  padding: 6px 12px;
+
+  border: 1px solid rgba(77, 232, 255, 0.22);
+  border-radius: 999px;
+
+  background: rgba(77, 232, 255, 0.04);
+}
+
+/* -------------------- TOPBAR: LIVE CLOCK -------------------- */
+
+.topbar-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  line-height: 1.3;
+}
+
+.topbar-clock .clock-date {
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+
+  color: var(--hud-text-dim);
+}
+
+.topbar-clock .clock-time {
+  font-family: monospace;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+
+  color: var(--atlas-cyan);
+
+  text-shadow: 0 0 12px rgba(77, 232, 255, 0.4);
+}
+
+/* -------------------- QUICK COMMANDS -------------------- */
+
+.quick-panel {
+  flex: 1;
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.quick-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 11px 12px;
+
+  border: 1px solid rgba(77, 232, 255, 0.16);
+  border-radius: 2px;
+
+  background: rgba(77, 232, 255, 0.03);
+
+  color: var(--hud-text-soft);
+
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s ease;
+}
+
+.quick-btn:hover {
+  background: rgba(77, 232, 255, 0.09);
+  border-color: rgba(77, 232, 255, 0.4);
+  color: var(--hud-text);
+}
+
+.quick-btn:active {
+  transform: scale(0.98);
+}
+
+.quick-btn-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: var(--atlas-cyan);
+  box-shadow: 0 0 8px var(--atlas-cyan);
+}
+
+/* -------------------- LIVE FEED -------------------- */
+
+.feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feed-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+
+  padding: 10px 4px;
+
+  border-bottom: 1px solid rgba(77, 232, 255, 0.06);
+}
+
+.feed-item:last-child {
+  border-bottom: none;
+}
+
+.feed-dot {
+  margin-top: 5px;
+
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: var(--atlas-cyan);
+  box-shadow: 0 0 7px var(--atlas-cyan);
+}
+
+.feed-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  min-width: 0;
+}
+
+.feed-label {
+  font-size: 11px;
+  line-height: 1.4;
+
+  color: var(--hud-text-soft);
+
+  overflow-wrap: break-word;
+}
+
+.feed-time {
+  font-family: monospace;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+
+  color: var(--hud-text-dim);
+}
+
+/* -------------------- PILL TALK BAR -------------------- */
+/* Replaces the old small round .mic-button + .voice-hint
+   with a wide pill bar, still absolutely positioned inside
+   .dashboard-center so the globe/canvas layout is untouched. */
+
+.talk-bar {
+  position: absolute;
+
+  left: 50%;
+  bottom: 20px;
+
+  transform: translateX(-50%);
+
+  z-index: 10;
+
+  display: flex;
+  align-items: center;
+  gap: 18px;
+
+  width: min(640px, 88%);
+
+  padding: 10px 22px;
+
+  border-radius: 999px;
+
+  background: rgba(2, 12, 20, 0.75);
+
+  border: 1px solid rgba(77, 232, 255, 0.3);
+
+  box-shadow:
+    0 0 30px rgba(77, 232, 255, 0.1),
+    inset 0 0 20px rgba(77, 232, 255, 0.05);
+
+  backdrop-filter: blur(12px);
+}
+
+.talk-bar-track {
+  flex: 1;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+
+  height: 22px;
+
+  overflow: hidden;
+}
+
+.talk-bar-wave {
+  display: inline-block;
+
+  width: 2px;
+  height: 6px;
+
+  border-radius: 2px;
+
+  background: rgba(77, 232, 255, 0.45);
+
+  animation: talkWave 1.2s ease-in-out infinite;
+}
+
+@keyframes talkWave {
+  0%,
+  100% {
+    height: 4px;
+    opacity: 0.35;
+  }
+  50% {
+    height: 18px;
+    opacity: 1;
+  }
+}
+
+.talk-bar-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  flex-shrink: 0;
+
+  padding: 9px 18px;
+
+  border-radius: 999px;
+
+  border: 1px solid var(--atlas-cyan);
+
+  background: rgba(77, 232, 255, 0.1);
+
+  color: var(--atlas-cyan);
+
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+
+  cursor: pointer;
+
+  white-space: nowrap;
+
+  box-shadow: 0 0 16px rgba(77, 232, 255, 0.18);
+
+  transition:
+    background 0.2s ease,
+    box-shadow 0.25s ease,
+    transform 0.15s ease;
+}
+
+.talk-bar-btn:hover {
+  background: rgba(77, 232, 255, 0.18);
+  transform: scale(1.03);
+}
+
+.talk-bar-btn:active {
+  transform: scale(0.97);
+}
+
+.talk-bar-btn.listening {
+  background: rgba(77, 232, 255, 0.22);
+  box-shadow:
+    0 0 26px rgba(77, 232, 255, 0.3),
+    0 0 50px rgba(77, 232, 255, 0.1);
+
+  animation: micListening 1.4s ease-in-out infinite;
+}
+
+.talk-bar-icon {
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* On very small screens, drop the side waveforms and just
+   keep the button + text centered so it doesn't overflow */
+@media (max-width: 560px) {
+  .talk-bar-track {
+    display: none;
+  }
+
+  .talk-bar {
+    justify-content: center;
+    width: min(320px, 92%);
+  }
+}
