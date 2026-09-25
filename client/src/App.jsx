@@ -7,6 +7,13 @@ import WeatherDialog from "./WeatherDialog";
 import MathDialog from "./MathDialog";
 import { solveMath, isMathQuestion } from "./mathEngine";
 import AtlasGlobe from "./AtlasGlobe";
+import LanguageToggle from "./components/LanguageToggle";
+import {
+  getLanguagePack,
+  getSpeechLang,
+  matchesWakeWord,
+  pickVoiceForLanguage,
+} from "./language/languageManager";
 
 // =========================================================
 // PARTICLE FIELD
@@ -175,14 +182,50 @@ function App() {
   const [songToPlay, setSongToPlay] = useState(null);
 
   // =========================================================
+  // LANGUAGE STATE — "en" or "hi". This is the single source of
+  // truth, same pattern as every other piece of shared state in
+  // this app. languageRef mirrors it for use inside setTimeout/
+  // speech-recognition callbacks, which otherwise read a stale
+  // value from whichever render created the closure (the same
+  // bug class that hit showMusic/showWeather earlier).
+  // =========================================================
+
+  const [language, setLanguage] = useState("en");
+  const languageRef = useRef("en");
+
+  useEffect(() => {
+    languageRef.current = language;
+
+    // If the wake-word listener is currently idle-listening (not
+    // mid-question, not mid-dialog), restart it so the new
+    // recognition.lang takes effect immediately instead of only
+    // on the next natural restart cycle.
+    if (
+      wakeWordRecognitionRef.current &&
+      !isProcessingRef.current &&
+      !showMusicRef.current &&
+      !showWeatherRef.current &&
+      !showMathRef.current
+    ) {
+      try {
+        wakeWordRecognitionRef.current.stop();
+      } catch (error) {
+        console.log("ATLAS: language-change wake restart:", error);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
+
+  const lang = getLanguagePack(language);
+
+  // =========================================================
   // WEATHER STATE
   // =========================================================
 
   const [showWeather, setShowWeather] = useState(false);
   const [showMath, setShowMath] = useState(false);
   const [mathResult, setMathResult] = useState(null);
-  const [weatherLocation, setWeatherLocation] =
-    useState("Greater Noida");
+  const [weatherLocation, setWeatherLocation] = useState("Greater Noida");
   const [weatherCoords, setWeatherCoords] = useState(null);
 
   const [booted, setBooted] = useState(false);
@@ -238,10 +281,7 @@ function App() {
     setInteractionLog((prev) => {
       const entry = {
         id: Date.now() + Math.random(),
-        label:
-          label.length > 46
-            ? label.slice(0, 46) + "…"
-            : label,
+        label: label.length > 46 ? label.slice(0, 46) + "…" : label,
         time: new Date().toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
@@ -258,6 +298,7 @@ function App() {
 
   const getLocalAnswer = (question) => {
     const q = question.toLowerCase().trim();
+    const pack = getLanguagePack(languageRef.current);
 
     // =====================================================
     // MUSIC COMMANDS
@@ -296,23 +337,7 @@ function App() {
       q.includes("introduce yourself")
     ) {
       return {
-        title: "A.T.L.A.S 3K",
-
-        answer:
-          "I am A.T.L.A.S 3K, an Advanced Technology and Learning Assistant System. I am a voice-based AI assistant created as an exhibition prototype.",
-
-        paragraphs: [
-          "I am A.T.L.A.S 3K, an Advanced Technology and Learning Assistant System.",
-
-          "I am designed to interact with users through voice, answer questions, provide information, and present knowledge through an interactive futuristic interface.",
-        ],
-
-        keyFacts: [
-          "Voice-based AI assistant",
-          "Designed for interactive learning",
-          "Built as an exhibition prototype",
-        ],
-
+        ...pack.local.whoAreYou,
         relatedLinks: [],
         imageQuery: "",
         imageUrl: "",
@@ -332,26 +357,7 @@ function App() {
       q.includes("what do you do")
     ) {
       return {
-        title: "ATLAS CAPABILITIES",
-
-        answer:
-          "I can listen to your questions through voice, process your requests, answer general knowledge and science questions, and present information through my visual interface.",
-
-        paragraphs: [
-          "I can listen to spoken questions and respond using voice.",
-
-          "I can answer questions across subjects such as science, general knowledge, technology and other areas supported by my knowledge systems.",
-
-          "My interface can also display expanded information, images, key facts and useful links when available.",
-        ],
-
-        keyFacts: [
-          "Voice interaction",
-          "Question answering",
-          "Science and general knowledge",
-          "Visual information display",
-        ],
-
+        ...pack.local.whatCanYouDo,
         relatedLinks: [],
         imageQuery: "",
         imageUrl: "",
@@ -370,23 +376,7 @@ function App() {
       q.includes("who developed you")
     ) {
       return {
-        title: "ATLAS ORIGIN",
-
-        answer:
-          "I was created as an AI exhibition project by my development team as an experimental voice-based learning assistant.",
-
-        paragraphs: [
-          "I was created as part of the A.T.L.A.S 3K exhibition project.",
-
-          "The project combines voice interaction, artificial intelligence and a futuristic visual interface to create a more interactive way of accessing information.",
-        ],
-
-        keyFacts: [
-          "A.T.L.A.S 3K exhibition project",
-          "Voice-based interaction",
-          "Focused on learning and information",
-        ],
-
+        ...pack.local.whoCreatedYou,
         relatedLinks: [],
         imageQuery: "",
         imageUrl: "",
@@ -404,19 +394,13 @@ function App() {
       q === "hey" ||
       q === "hello atlas" ||
       q === "hey atlas" ||
-      q === "atlas"
+      q === "atlas" ||
+      q === "नमस्ते" ||
+      q === "नमस्ते एटलस" ||
+      q === "हैलो एटलस"
     ) {
       return {
-        title: "ATLAS",
-
-        answer:
-          "Hello",
-
-        paragraphs: [
-          "Hello",
-          "How can I assist you?",
-        ],
-
+        ...pack.local.greetingReply,
         keyFacts: [],
         relatedLinks: [],
         imageQuery: "",
@@ -429,18 +413,14 @@ function App() {
     // THANK YOU
     // =====================================================
 
-    if (q.includes("thank you") || q.includes("thanks")) {
+    if (
+      q.includes("thank you") ||
+      q.includes("thanks") ||
+      q.includes("धन्यवाद") ||
+      q.includes("शुक्रिया")
+    ) {
       return {
-        title: "ATLAS",
-
-        answer:
-          "You're welcome. I am always ready for your next question.",
-
-        paragraphs: [
-          "You're welcome.",
-          "I am always ready for your next question.",
-        ],
-
+        ...pack.local.thankYou,
         keyFacts: [],
         relatedLinks: [],
         imageQuery: "",
@@ -472,18 +452,11 @@ function App() {
 
     console.log("ATLAS MUSIC REQUEST:", command);
 
-    const genericFillers = [
-      "",
-      "a",
-      "a song",
-      "some",
-      "something",
-      "anything",
-    ];
+    const genericFillers = ["", "a", "a song", "some", "something", "anything"];
 
-    const cleanedCommand = genericFillers.includes(command)
-      ? null
-      : command;
+    const cleanedCommand = genericFillers.includes(command) ? null : command;
+
+    const pack = getLanguagePack(languageRef.current);
 
     isProcessingRef.current = true;
 
@@ -492,8 +465,8 @@ function App() {
 
     setStatus(
       cleanedCommand
-        ? "SEARCHING MUSIC: " + cleanedCommand.toUpperCase()
-        : "MUSIC SYSTEM"
+        ? pack.systemStatus.searchingMusic + ": " + cleanedCommand.toUpperCase()
+        : pack.systemStatus.musicSystem,
     );
 
     return true;
@@ -507,6 +480,8 @@ function App() {
     if (!isMathQuestion(question)) {
       return false;
     }
+
+    const pack = getLanguagePack(languageRef.current);
 
     try {
       console.log("ATLAS: LOCAL MATH ENGINE → MathJS");
@@ -522,19 +497,21 @@ function App() {
       setAiText("");
       setResult(null);
       setShowResults(false);
-      setStatus("MATH CORE ACTIVE");
+      setStatus(pack.systemStatus.mathActive);
       isProcessingRef.current = true;
 
       const spoken =
         result.type === "equation" && result.solutions
-          ? (result.solutions.length
-              ? `The solution is ${result.solutions
-                  .map((v) => `${result.variable || "x"} equals ${v}`)
-                  .join(" and ")}.`
-              : "I could not find a real solution.")
+          ? result.solutions.length
+            ? pack.math.solutionIs(
+                result.solutions
+                  .map((v) => pack.math.equalsPart(result.variable || "x", v))
+                  .join(" " + (pack.code === "hi" ? "और" : "and") + " "),
+              )
+            : pack.math.noRealSolution
           : result.result
-            ? `The answer is ${result.result}.`
-            : "The mathematical analysis is complete.";
+            ? pack.math.answerIs(result.result)
+            : pack.math.analysisComplete;
       setTimeout(() => speak(spoken), 80);
 
       return true;
@@ -553,9 +530,9 @@ function App() {
       setAiText("");
       setResult(null);
       setShowResults(false);
-      setStatus("MATH CORE — LOCAL ONLY");
+      setStatus(pack.systemStatus.mathError);
       isProcessingRef.current = true;
-      setTimeout(() => speak("I could not solve that locally. No AI request was sent."), 80);
+      setTimeout(() => speak(pack.math.couldNotSolve), 80);
       return true;
     }
   };
@@ -566,6 +543,7 @@ function App() {
 
   const askAtlas = async (question) => {
     const localAnswer = getLocalAnswer(question);
+    const pack = getLanguagePack(languageRef.current);
 
     if (localAnswer?.type === "music") {
       console.log("ATLAS: MUSIC COMMAND");
@@ -609,34 +587,27 @@ function App() {
 
           body: JSON.stringify({
             question,
+            language: languageRef.current,
           }),
-        }
+        },
       );
 
       if (!response.ok) {
-        throw new Error(
-          "Failed to connect to ATLAS backend"
-        );
+        throw new Error("Failed to connect to ATLAS backend");
       }
 
       const data = await response.json();
 
       return data;
     } catch (error) {
-      console.error(
-        "ATLAS API ERROR:",
-        error
-      );
+      console.error("ATLAS API ERROR:", error);
 
       return {
-        title: "Connection Error",
+        title: pack.connectionError.title,
 
-        answer:
-          "I am unable to connect to my intelligence core right now.",
+        answer: pack.connectionError.answer,
 
-        paragraphs: [
-          "The ATLAS intelligence service could not be reached.",
-        ],
+        paragraphs: [pack.connectionError.paragraph],
 
         keyFacts: [],
         relatedLinks: [],
@@ -657,12 +628,9 @@ function App() {
     if (!text || !text.trim()) {
       isProcessingRef.current = false;
 
-      if (
-        !showMusicRef.current &&
-        !showWeatherRef.current
-      ) {
+      if (!showMusicRef.current && !showWeatherRef.current) {
         setStatus(
-          "WAITING FOR WAKE WORD"
+          getLanguagePack(languageRef.current).systemStatus.waitingWake,
         );
 
         setTimeout(() => {
@@ -675,28 +643,21 @@ function App() {
 
     window.speechSynthesis.cancel();
 
-    const cleanText = text
-      .replace(/\n+/g, ". ")
-      .replace(/\s+/g, " ")
-      .trim();
+    const speechLang = getSpeechLang(languageRef.current);
+    const voice = pickVoiceForLanguage(languageRef.current);
 
-    const sentences =
-      cleanText.match(/[^.!?]+[.!?]+/g) ||
-      [cleanText];
+    const cleanText = text.replace(/\n+/g, ". ").replace(/\s+/g, " ").trim();
+
+    const sentences = cleanText.match(/[^.!?।]+[.!?।]+/g) || [cleanText];
 
     const chunks = [];
 
     let currentChunk = "";
 
     sentences.forEach((sentence) => {
-      if (
-        (currentChunk + sentence).length >
-        350
-      ) {
+      if ((currentChunk + sentence).length > 350) {
         if (currentChunk.trim()) {
-          chunks.push(
-            currentChunk.trim()
-          );
+          chunks.push(currentChunk.trim());
         }
 
         currentChunk = sentence;
@@ -706,25 +667,22 @@ function App() {
     });
 
     if (currentChunk.trim()) {
-      chunks.push(
-        currentChunk.trim()
-      );
+      chunks.push(currentChunk.trim());
     }
 
     speechQueueRef.current = chunks;
     speechIndexRef.current = 0;
 
     setSpeaking(true);
-    setStatus("SPEAKING");
+    setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
 
-    speakNextChunk();
+    speakNextChunk(speechLang, voice);
   };
 
-  const speakNextChunk = () => {
+  const speakNextChunk = (speechLang, voice) => {
     const queue = speechQueueRef.current;
 
-    const index =
-      speechIndexRef.current;
+    const index = speechIndexRef.current;
 
     if (index >= queue.length) {
       setSpeaking(false);
@@ -743,9 +701,7 @@ function App() {
 
       isProcessingRef.current = false;
 
-      setStatus(
-        "WAITING FOR WAKE WORD"
-      );
+      setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
 
       setTimeout(() => {
         startWakeWordDetection();
@@ -754,10 +710,15 @@ function App() {
       return;
     }
 
-    const utterance =
-      new SpeechSynthesisUtterance(
-        queue[index]
-      );
+    const utterance = new SpeechSynthesisUtterance(queue[index]);
+
+    utterance.lang = speechLang || getSpeechLang(languageRef.current);
+
+    const resolvedVoice = voice || pickVoiceForLanguage(languageRef.current);
+
+    if (resolvedVoice) {
+      utterance.voice = resolvedVoice;
+    }
 
     utterance.rate = 0.95;
     utterance.pitch = 0.9;
@@ -765,48 +726,40 @@ function App() {
 
     utterance.onstart = () => {
       setSpeaking(true);
-      setStatus("SPEAKING");
+      setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
     };
 
     utterance.onend = () => {
       speechIndexRef.current += 1;
 
       setTimeout(() => {
-        speakNextChunk();
+        speakNextChunk(speechLang, voice);
       }, 50);
     };
 
     utterance.onerror = (event) => {
-      console.error(
-        "Speech error:",
-        event
-      );
+      console.error("Speech error:", event);
 
       speechIndexRef.current += 1;
 
       setTimeout(() => {
-        speakNextChunk();
+        speakNextChunk(speechLang, voice);
       }, 50);
     };
 
-    window.speechSynthesis.speak(
-      utterance
-    );
+    window.speechSynthesis.speak(utterance);
   };
 
   // =========================================================
   // PROCESS QUESTION
   // =========================================================
 
-  const processQuestion = async (
-    question
-  ) => {
+  const processQuestion = async (question) => {
     if (!question.trim()) return;
 
     logInteraction(question);
 
-    const lowerQuestion =
-      question.toLowerCase().trim();
+    const lowerQuestion = question.toLowerCase().trim();
 
     if (handleMathCommand(question)) {
       return;
@@ -817,23 +770,16 @@ function App() {
       lowerQuestion.includes("climate") ||
       lowerQuestion.includes("temperature")
     ) {
-      console.log(
-        "ATLAS: WEATHER COMMAND"
-      );
+      console.log("ATLAS: WEATHER COMMAND");
 
-      const locationMatch =
-        lowerQuestion.match(
-          /(?:weather|climate|temperature)\s+(?:in|for|at|of)\s+([a-zA-Z\s]+?)(?:\s+today|\s+tomorrow|\s+right now|\s+now)?$/i
-        );
+      const locationMatch = lowerQuestion.match(
+        /(?:weather|climate|temperature)\s+(?:in|for|at|of)\s+([a-zA-Z\s]+?)(?:\s+today|\s+tomorrow|\s+right now|\s+now)?$/i,
+      );
 
       let location = null;
 
-      if (
-        locationMatch &&
-        locationMatch[1].trim()
-      ) {
-        location =
-          locationMatch[1].trim();
+      if (locationMatch && locationMatch[1].trim()) {
+        location = locationMatch[1].trim();
       }
 
       setUserText(question);
@@ -844,15 +790,14 @@ function App() {
 
       setShowResults(false);
 
-      setStatus("WEATHER SYSTEM");
+      setStatus(
+        getLanguagePack(languageRef.current).systemStatus.weatherSystem,
+      );
 
       isProcessingRef.current = true;
 
       if (location) {
-        console.log(
-          "ATLAS WEATHER LOCATION:",
-          location
-        );
+        console.log("ATLAS WEATHER LOCATION:", location);
 
         setWeatherCoords(null);
         setWeatherLocation(location);
@@ -861,9 +806,7 @@ function App() {
         return;
       }
 
-      console.log(
-        "ATLAS WEATHER: NO CITY NAMED, USING CURRENT LOCATION"
-      );
+      console.log("ATLAS WEATHER: NO CITY NAMED, USING CURRENT LOCATION");
 
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -877,8 +820,7 @@ function App() {
             setShowWeather(true);
           },
           async () => {
-            const ipLoc =
-              await getApproxLocationByIP();
+            const ipLoc = await getApproxLocationByIP();
 
             if (ipLoc) {
               setWeatherCoords(ipLoc);
@@ -886,17 +828,16 @@ function App() {
             } else {
               setWeatherCoords(null);
               setWeatherLocation(
-                "Greater Noida"
+                getLanguagePack(languageRef.current).weather.fallbackCity,
               );
             }
 
             setShowWeather(true);
           },
-          { timeout: 6000 }
+          { timeout: 6000 },
         );
       } else {
-        const ipLoc =
-          await getApproxLocationByIP();
+        const ipLoc = await getApproxLocationByIP();
 
         if (ipLoc) {
           setWeatherCoords(ipLoc);
@@ -904,7 +845,7 @@ function App() {
         } else {
           setWeatherCoords(null);
           setWeatherLocation(
-            "Greater Noida"
+            getLanguagePack(languageRef.current).weather.fallbackCity,
           );
         }
 
@@ -914,14 +855,10 @@ function App() {
       return;
     }
 
-    if (
-      handleMusicCommand(question)
-    ) {
+    if (handleMusicCommand(question)) {
       setUserText(question);
 
-      setAiText(
-        "Opening local music library."
-      );
+      setAiText("Opening local music library.");
 
       return;
     }
@@ -934,15 +871,13 @@ function App() {
 
     setShowResults(false);
 
-    setStatus("PROCESSING");
+    setStatus(getLanguagePack(languageRef.current).systemStatus.processing);
 
     isProcessingRef.current = true;
 
-    const data =
-      await askAtlas(question);
+    const data = await askAtlas(question);
 
-    const answer =
-      data.answer || "";
+    const answer = data.answer || "";
 
     setAiText(answer);
 
@@ -950,7 +885,7 @@ function App() {
 
     setShowResults(true);
 
-    setStatus("SPEAKING");
+    setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
 
     speak(answer);
   };
@@ -966,11 +901,10 @@ function App() {
     if (isProcessingRef.current) return;
 
     const SpeechRecognition =
-      window.SpeechRecognition ||
-      window.webkitSpeechRecognition;
+      window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      setStatus("VOICE RECOGNITION UNSUPPORTED");
+      setStatus(getLanguagePack(languageRef.current).systemStatus.unsupported);
       return;
     }
 
@@ -985,7 +919,7 @@ function App() {
     const sessionId = ++wakeSessionIdRef.current;
     const recognition = new SpeechRecognition();
 
-    recognition.lang = "en-US";
+    recognition.lang = getSpeechLang(languageRef.current);
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
@@ -993,12 +927,12 @@ function App() {
     let wakeWordTriggered = false;
     let intentionallyStopped = false;
 
-    console.log("ATLAS: creating wake session", sessionId);
+    console.log("ATLAS: creating wake session", sessionId, recognition.lang);
 
     recognition.onstart = () => {
       console.log("ATLAS: WAKE LISTENER STARTED", sessionId);
       setListening(false);
-      setStatus("WAITING FOR WAKE WORD");
+      setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
     };
 
     recognition.onresult = (event) => {
@@ -1014,15 +948,7 @@ function App() {
 
       console.log("ATLAS WAKE HEARD:", transcript);
 
-      const wakeDetected =
-        transcript.includes("hey atlas") ||
-        transcript.includes("hello atlas") ||
-        transcript.includes("hello") ||
-        transcript.includes("hey at last") ||
-        transcript.includes("hey atlas 3k") ||
-        transcript.includes("okay atlas") ||
-        transcript.includes("okay at least") ||
-        transcript.includes("ok atlas");
+      const wakeDetected = matchesWakeWord(transcript, languageRef.current);
 
       if (!wakeDetected) return;
 
@@ -1032,7 +958,7 @@ function App() {
       intentionallyStopped = true;
       isProcessingRef.current = true;
 
-      setStatus("WAKE WORD DETECTED");
+      setStatus(getLanguagePack(languageRef.current).systemStatus.wakeDetected);
 
       try {
         recognition.stop();
@@ -1052,7 +978,7 @@ function App() {
       if (event.error === "not-allowed") {
         wakeWordRecognitionRef.current = null;
         isProcessingRef.current = false;
-        setStatus("MICROPHONE ACCESS DENIED");
+        setStatus(getLanguagePack(languageRef.current).systemStatus.micDenied);
         return;
       }
 
@@ -1079,7 +1005,11 @@ function App() {
 
       if (intentionallyStopped) return;
       if (isProcessingRef.current) return;
-      if (showMusicRef.current || showWeatherRef.current || showMathRef.current) {
+      if (
+        showMusicRef.current ||
+        showWeatherRef.current ||
+        showMathRef.current
+      ) {
         return;
       }
 
@@ -1126,135 +1056,101 @@ function App() {
   // QUESTION LISTENING
   // =========================================================
 
-  const startQuestionListening =
-    () => {
-      const SpeechRecognition =
-        window.SpeechRecognition ||
-        window.webkitSpeechRecognition;
+  const startQuestionListening = () => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
 
-      if (!SpeechRecognition)
-        return;
+    if (!SpeechRecognition) return;
 
-      if (recognitionRef.current)
-        return;
+    if (recognitionRef.current) return;
 
-      const recognition =
-        new SpeechRecognition();
+    const recognition = new SpeechRecognition();
 
-      recognition.lang = "en-US";
+    recognition.lang = getSpeechLang(languageRef.current);
 
-      recognition.continuous = false;
+    recognition.continuous = false;
 
-      recognition.interimResults = false;
+    recognition.interimResults = false;
 
-      recognition.onstart = () => {
-        setListening(true);
+    recognition.onstart = () => {
+      setListening(true);
 
-        setStatus("LISTENING");
+      setStatus(getLanguagePack(languageRef.current).systemStatus.listening);
 
-        setUserText("");
+      setUserText("");
 
-        setAiText("");
+      setAiText("");
 
-        setResult(null);
+      setResult(null);
 
-        setShowResults(false);
-      };
-
-      recognition.onresult = (
-        event
-      ) => {
-        const transcript =
-          event.results[0][0]
-            .transcript;
-
-        console.log(
-          "Question:",
-          transcript
-        );
-
-        setListening(false);
-
-        isProcessingRef.current =
-          true;
-
-        processQuestion(
-          transcript
-        );
-      };
-
-      recognition.onerror = (
-        event
-      ) => {
-        console.log(
-          "Question recognition error:",
-          event.error
-        );
-
-        setListening(false);
-
-        recognitionRef.current =
-          null;
-
-        if (
-          event.error ===
-          "no-speech"
-        ) {
-          setStatus(
-            "NO QUESTION DETECTED"
-          );
-        } else {
-          setStatus(
-            "VOICE ERROR"
-          );
-        }
-
-        isProcessingRef.current =
-          false;
-
-        setTimeout(() => {
-          startWakeWordDetection();
-        }, 1000);
-      };
-
-      recognition.onend = () => {
-        setListening(false);
-
-        recognitionRef.current =
-          null;
-      };
-
-      recognitionRef.current =
-        recognition;
-
-      try {
-        recognition.start();
-      } catch (error) {
-        console.log(
-          "Question recognition start error:",
-          error
-        );
-      }
+      setShowResults(false);
     };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+
+      console.log("Question:", transcript);
+
+      setListening(false);
+
+      isProcessingRef.current = true;
+
+      processQuestion(transcript);
+    };
+
+    recognition.onerror = (event) => {
+      console.log("Question recognition error:", event.error);
+
+      setListening(false);
+
+      recognitionRef.current = null;
+
+      const pack = getLanguagePack(languageRef.current);
+
+      if (event.error === "no-speech") {
+        setStatus(pack.systemStatus.noQuestion);
+      } else {
+        setStatus(pack.systemStatus.voiceError);
+      }
+
+      isProcessingRef.current = false;
+
+      setTimeout(() => {
+        startWakeWordDetection();
+      }, 1000);
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+
+    try {
+      recognition.start();
+    } catch (error) {
+      console.log("Question recognition start error:", error);
+    }
+  };
 
   // =========================================================
   // AUTOMATIC BOOT
   // =========================================================
 
   useEffect(() => {
-    const bootTimer =
+    const bootTimer = setTimeout(() => {
+      setBooted(true);
+
+      const greeting = getLanguagePack(languageRef.current).greeting;
+
+      setAiText(greeting);
+
       setTimeout(() => {
-        setBooted(true);
-
-        const greeting =
-          "Hello.";
-
-        setAiText(greeting);
-
-        setTimeout(() => {
-          speak(greeting);
-        }, 500);
-      }, 3000);
+        speak(greeting);
+      }, 500);
+    }, 3000);
 
     return () => {
       clearTimeout(bootTimer);
@@ -1266,15 +1162,11 @@ function App() {
 
       window.speechSynthesis.cancel();
 
-      if (
-        recognitionRef.current
-      ) {
+      if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
 
-      if (
-        wakeWordRecognitionRef.current
-      ) {
+      if (wakeWordRecognitionRef.current) {
         wakeWordRecognitionRef.current.stop();
       }
     };
@@ -1296,20 +1188,14 @@ function App() {
 
           <div className="boot-ring ring-3"></div>
 
-          <div className="boot-center">
-            A
-          </div>
+          <div className="boot-center">A</div>
         </div>
 
         <h1>
-          A.T.L.A.S{" "}
-          <span>3K</span>
+          A.T.L.A.S <span>3K</span>
         </h1>
 
-        <p>
-          ADVANCED TECHNOLOGY &
-          LEARNING ASSISTANT SYSTEM
-        </p>
+        <p>ADVANCED TECHNOLOGY & LEARNING ASSISTANT SYSTEM</p>
 
         <p
           style={{
@@ -1343,12 +1229,9 @@ function App() {
 
             setSongToPlay(null);
 
-            isProcessingRef.current =
-              false;
+            isProcessingRef.current = false;
 
-            setStatus(
-              "WAITING FOR WAKE WORD"
-            );
+            setStatus("WAITING FOR WAKE WORD");
 
             setTimeout(() => {
               startWakeWordDetection();
@@ -1364,12 +1247,9 @@ function App() {
           onClose={() => {
             setShowWeather(false);
 
-            isProcessingRef.current =
-              false;
+            isProcessingRef.current = false;
 
-            setStatus(
-              "WAITING FOR WAKE WORD"
-            );
+            setStatus("WAITING FOR WAKE WORD");
 
             setTimeout(() => {
               startWakeWordDetection();
@@ -1403,17 +1283,16 @@ function App() {
             </div>
 
             <div className="logo">
-              A.T.L.A.S{" "}
-              <span>3K</span>
+              A.T.L.A.S <span>3K</span>
             </div>
+
+            {/* LANGUAGE TOGGLE */}
+            <LanguageToggle language={language} onChange={setLanguage} />
 
             <div className="version">
               {result.modelUsed
                 ? `CORE // ${
-                    result.modelUsed.split(
-                      "/"
-                    )[1] ||
-                    result.modelUsed
+                    result.modelUsed.split("/")[1] || result.modelUsed
                   }`
                 : "V1.0 // KNOWLEDGE CORE"}
             </div>
@@ -1421,14 +1300,9 @@ function App() {
 
           <main className="results-page">
             <div className="results-header">
-              <div className="results-label">
-                INTELLIGENCE REPORT
-              </div>
+              <div className="results-label">INTELLIGENCE REPORT</div>
 
-              <h1>
-                {result.title ||
-                  "ATLAS Intelligence Report"}
-              </h1>
+              <h1>{result.title || "ATLAS Intelligence Report"}</h1>
 
               <div className="question-display">
                 <span>QUERY</span>
@@ -1442,15 +1316,9 @@ function App() {
                 {result.imageUrl && (
                   <div className="results-image-card">
                     <img
-                      src={
-                        result.imageUrl
-                      }
-                      alt={
-                        result.title
-                      }
-                      onError={(
-                        event
-                      ) => {
+                      src={result.imageUrl}
+                      alt={result.title}
+                      onError={(event) => {
                         event.currentTarget.parentElement.style.display =
                           "none";
                       }}
@@ -1459,137 +1327,59 @@ function App() {
                 )}
 
                 <div className="results-content">
-                  {(
-                    result.paragraphs ||
-                    []
-                  ).map(
-                    (
-                      paragraph,
-                      index
-                    ) => (
-                      <p
-                        key={
-                          index
-                        }
-                      >
-                        {
-                          paragraph
-                        }
-                      </p>
-                    )
-                  )}
+                  {(result.paragraphs || []).map((paragraph, index) => (
+                    <p key={index}>{paragraph}</p>
+                  ))}
 
                   {result.answer &&
-                    (!result.paragraphs ||
-                      result.paragraphs
-                        .length ===
-                        0) && (
-                      <p>
-                        {
-                          result.answer
-                        }
-                      </p>
+                    (!result.paragraphs || result.paragraphs.length === 0) && (
+                      <p>{result.answer}</p>
                     )}
                 </div>
 
-                {result.keyFacts &&
-                  result.keyFacts
-                    .length >
-                    0 && (
-                    <div className="facts-section">
-                      <div className="section-heading">
-                        KEY FACTS
-                      </div>
+                {result.keyFacts && result.keyFacts.length > 0 && (
+                  <div className="facts-section">
+                    <div className="section-heading">KEY FACTS</div>
 
-                      <div className="facts-grid">
-                        {result.keyFacts.map(
-                          (
-                            fact,
-                            index
-                          ) => (
-                            <div
-                              className="fact-card"
-                              key={
-                                index
-                              }
-                            >
-                              <span>
-                                {String(
-                                  index +
-                                    1
-                                ).padStart(
-                                  2,
-                                  "0"
-                                )}
-                              </span>
+                    <div className="facts-grid">
+                      {result.keyFacts.map((fact, index) => (
+                        <div className="fact-card" key={index}>
+                          <span>{String(index + 1).padStart(2, "0")}</span>
 
-                              <p>
-                                {
-                                  fact
-                                }
-                              </p>
-                            </div>
-                          )
-                        )}
-                      </div>
+                          <p>{fact}</p>
+                        </div>
+                      ))}
                     </div>
-                  )}
+                  </div>
+                )}
 
-                {result.relatedLinks &&
-                  result.relatedLinks
-                    .length >
-                    0 && (
-                    <div className="links-section">
-                      <div className="section-heading">
-                        EXPLORE FURTHER
-                      </div>
+                {result.relatedLinks && result.relatedLinks.length > 0 && (
+                  <div className="links-section">
+                    <div className="section-heading">EXPLORE FURTHER</div>
 
-                      <div className="links-grid">
-                        {result.relatedLinks.map(
-                          (
-                            link,
-                            index
-                          ) => (
-                            <a
-                              key={
-                                index
-                              }
-                              href={
-                                link.url
-                              }
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="knowledge-link"
-                            >
-                              <span className="link-number">
-                                0
-                                {index +
-                                  1}
-                              </span>
+                    <div className="links-grid">
+                      {result.relatedLinks.map((link, index) => (
+                        <a
+                          key={index}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="knowledge-link"
+                        >
+                          <span className="link-number">0{index + 1}</span>
 
-                              <div>
-                                <strong>
-                                  {
-                                    link.title
-                                  }
-                                </strong>
+                          <div>
+                            <strong>{link.title}</strong>
 
-                                <small>
-                                  {
-                                    link.description
-                                  }
-                                </small>
-                              </div>
+                            <small>{link.description}</small>
+                          </div>
 
-                              <span className="link-arrow">
-                                ↗
-                              </span>
-                            </a>
-                          )
-                        )}
-                      </div>
+                          <span className="link-arrow">↗</span>
+                        </a>
+                      ))}
                     </div>
-                  )}
+                  </div>
+                )}
               </section>
 
               <aside className="results-side">
@@ -1601,29 +1391,21 @@ function App() {
                   <div className="side-status">
                     <span className="status-dot"></span>
 
-                    {speaking
-                      ? "ATLAS SPEAKING"
-                      : "REPORT READY"}
+                    {speaking ? "ATLAS SPEAKING" : "REPORT READY"}
                   </div>
 
                   <div className="side-line"></div>
 
                   <p>
-                    A.T.L.A.S has
-                    generated an
-                    expanded
-                    knowledge report
-                    based on your
-                    query.
+                    A.T.L.A.S has generated an expanded knowledge report based
+                    on your query.
                   </p>
                 </div>
 
                 <button
                   className="back-command"
                   onClick={() => {
-                    setShowResults(
-                      false
-                    );
+                    setShowResults(false);
 
                     setResult(null);
 
@@ -1636,23 +1418,17 @@ function App() {
                     }, 300);
                   }}
                 >
-                  ← RETURN TO
-                  ATLAS
+                  ← RETURN TO ATLAS
                 </button>
               </aside>
             </div>
           </main>
 
           <footer>
-            <span>
-              A.T.L.A.S 3K // AI
-              EXHIBITION PROTOTYPE
-            </span>
+            <span>A.T.L.A.S 3K // AI EXHIBITION PROTOTYPE</span>
 
             <span>
-              {speaking
-                ? "VOICE OUTPUT ACTIVE"
-                : "ALL SYSTEMS NOMINAL"}
+              {speaking ? "VOICE OUTPUT ACTIVE" : "ALL SYSTEMS NOMINAL"}
             </span>
           </footer>
         </>
@@ -1665,38 +1441,30 @@ function App() {
             </div>
 
             <div className="logo">
-              A.T.L.A.S{" "}
-              <span>3K</span>
+              A.T.L.A.S <span>3K</span>
             </div>
 
             <LiveClock />
 
-            <div className="version">
-              V1.0 // VOICE CORE
-            </div>
+            <LanguageToggle language={language} onChange={setLanguage} />
+
+            <div className="version">V1.0 // VOICE CORE</div>
           </header>
 
           <main className="dashboard">
             <aside className="left-panel">
               <div className="panel brand-panel">
-                <small>
-                  ADVANCED TECHNOLOGY
-                </small>
+                <small>ADVANCED TECHNOLOGY</small>
 
                 <h2>
-                  A.T.L.A.S{" "}
-                  <span>3K</span>
+                  A.T.L.A.S <span>3K</span>
                 </h2>
 
-                <small>
-                  INTELLIGENCE SYSTEM
-                </small>
+                <small>INTELLIGENCE SYSTEM</small>
               </div>
 
               <div className="panel">
-                <div className="panel-title">
-                  SYSTEM STATUS
-                </div>
+                <div className="panel-title">SYSTEM STATUS</div>
 
                 <div className="status-row">
                   <span>CORE</span>
@@ -1709,40 +1477,34 @@ function App() {
 
                   <b>
                     {listening
-                      ? "LISTENING"
+                      ? lang.systemStatus.listening
                       : speaking
-                        ? "OUTPUT"
+                        ? lang.systemStatus.output
                         : showMusic
-                          ? "MUSIC"
+                          ? lang.systemStatus.music
                           : showWeather
-                            ? "WEATHER"
+                            ? lang.systemStatus.weather
                             : showMath
-                              ? "MATH"
-                              : "READY"}
+                              ? lang.systemStatus.math
+                              : lang.systemStatus.ready}
                   </b>
                 </div>
 
                 <div className="status-row">
-                  <span>
-                    NEURAL LINK
-                  </span>
+                  <span>NEURAL LINK</span>
 
                   <b>STANDBY</b>
                 </div>
 
                 <div className="status-row">
-                  <span>
-                    VISUAL SYSTEM
-                  </span>
+                  <span>VISUAL SYSTEM</span>
 
                   <b>ACTIVE</b>
                 </div>
               </div>
 
               <div className="panel quick-panel">
-                <div className="panel-title">
-                  QUICK COMMANDS
-                </div>
+                <div className="panel-title">QUICK COMMANDS</div>
 
                 <div className="quick-grid">
                   <button
@@ -1807,20 +1569,13 @@ function App() {
             </aside>
 
             <section className="dashboard-center">
-              <AtlasGlobe
-                listening={listening}
-                speaking={speaking}
-              />
+              <AtlasGlobe listening={listening} speaking={speaking} />
 
-              <div className="voice-status">
-                {status}
-              </div>
+              <div className="voice-status">{status}</div>
 
               {userText && (
                 <div className="user-subtitle">
-                  <span className="subtitle-label">
-                    YOU
-                  </span>
+                  <span className="subtitle-label">YOU</span>
                   {userText}
                 </div>
               )}
@@ -1838,9 +1593,7 @@ function App() {
 
                 <button
                   type="button"
-                  className={`talk-bar-btn ${
-                    listening ? "listening" : ""
-                  }`}
+                  className={`talk-bar-btn ${listening ? "listening" : ""}`}
                   onClick={() => {
                     if (listening) {
                       try {
@@ -1862,13 +1615,9 @@ function App() {
                   }}
                   aria-label="Voice microphone"
                 >
-                  <span className="talk-bar-icon">
-                    {listening ? "■" : "●"}
-                  </span>
+                  <span className="talk-bar-icon">{listening ? "■" : "●"}</span>
                   <span className="talk-bar-text">
-                    {listening
-                      ? "Listening..."
-                      : 'Tap to speak · say "Hello"'}
+                    {listening ? lang.voiceHintListening : lang.voiceHintIdle}
                   </span>
                 </button>
 
@@ -1886,26 +1635,15 @@ function App() {
 
             <aside className="right-panel">
               <div className="panel response-panel">
-                <div className="panel-title">
-                  LIVE FEED
-                </div>
+                <div className="panel-title">LIVE FEED</div>
 
                 {interactionLog.length === 0 ? (
                   <div className="waiting">
-                    <div className="waiting-symbol">
-                      ◈
-                    </div>
+                    <div className="waiting-symbol">◈</div>
 
-                    <p>
-                      A.T.L.A.S is
-                      waiting for your
-                      command.
-                    </p>
+                    <p>A.T.L.A.S is waiting for your command.</p>
 
-                    <small>
-                      Say "Hey Atlas" to
-                      begin.
-                    </small>
+                    <small>Say "Hey Atlas" to begin.</small>
                   </div>
                 ) : (
                   <div className="feed-list">
@@ -1913,12 +1651,8 @@ function App() {
                       <div className="feed-item" key={entry.id}>
                         <span className="feed-dot" />
                         <div className="feed-body">
-                          <span className="feed-label">
-                            {entry.label}
-                          </span>
-                          <span className="feed-time">
-                            {entry.time}
-                          </span>
+                          <span className="feed-label">{entry.label}</span>
+                          <span className="feed-time">{entry.time}</span>
                         </div>
                       </div>
                     ))}
@@ -1929,10 +1663,7 @@ function App() {
           </main>
 
           <footer>
-            <span>
-              A.T.L.A.S 3K // AI
-              EXHIBITION PROTOTYPE
-            </span>
+            <span>A.T.L.A.S 3K // AI EXHIBITION PROTOTYPE</span>
 
             <span>
               {speaking

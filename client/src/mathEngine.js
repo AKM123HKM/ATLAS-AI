@@ -1,10 +1,24 @@
 // ============================================================
 // A.T.L.A.S 3K — LOCAL MATH ENGINE
-
 //
 // IMPORTANT:
 //   This engine is completely local.
 //   It does NOT make API/network requests.
+//
+// CHANGELOG (Hindi fix):
+//   - Added normalizeHindiNumerals() which converts Devanagari
+//     digits (०-९) and spoken Hindi number words (एक, दो, तीन...)
+//     into plain ASCII digits BEFORE any regex that tests /\d/.
+//   - This is applied at the very top of isMathQuestion() (the
+//     gatekeeper that decides whether a question is even routed
+//     to this engine) and at the entry of every sub-solver that
+//     previously ran its regex against the raw, un-normalized
+//     input. Without this, hi-IN speech recognition transcripts
+//     like "५ जोड़ ३" or "पाँच जोड़ तीन" never matched \d and the
+//     question silently fell through to the AI backend instead
+//     of being solved locally.
+//   - Also added "डिग्री" (degrees) recognition for trig/angle
+//     detection.
 // ============================================================
 
 import { create, all } from "mathjs";
@@ -12,6 +26,118 @@ import { create, all } from "mathjs";
 const math = create(all);
 
 const EPS = 1e-10;
+
+// ============================================================
+// HINDI NUMERAL / NUMBER-WORD NORMALIZATION
+// ============================================================
+
+const DEVANAGARI_DIGITS = {
+  "०": "0",
+  "१": "1",
+  "२": "2",
+  "३": "3",
+  "४": "4",
+  "५": "5",
+  "६": "6",
+  "७": "7",
+  "८": "8",
+  "९": "9",
+};
+
+function normalizeDevanagariDigits(text) {
+  return String(text ?? "").replace(
+    /[०-९]/g,
+    (d) => DEVANAGARI_DIGITS[d] ?? d
+  );
+}
+
+// Spoken/spelled-out Hindi number words that hi-IN speech
+// recognition may transcribe instead of digits.
+const HINDI_NUMBER_WORDS = {
+  "शून्य": "0",
+  "एक": "1",
+  "दो": "2",
+  "तीन": "3",
+  "चार": "4",
+  "पांच": "5",
+  "पाँच": "5",
+  "छह": "6",
+  "छः": "6",
+  "सात": "7",
+  "आठ": "8",
+  "नौ": "9",
+  "दस": "10",
+  "ग्यारह": "11",
+  "बारह": "12",
+  "तेरह": "13",
+  "चौदह": "14",
+  "पंद्रह": "15",
+  "सोलह": "16",
+  "सत्रह": "17",
+  "अठारह": "18",
+  "उन्नीस": "19",
+  "बीस": "20",
+};
+
+// Devanagari characters are not part of JS's \w class, so a
+// regex \b word-boundary silently fails to match Hindi words.
+// We split on whitespace instead and swap whole tokens, which
+// also avoids accidentally matching a number word that is a
+// substring of a longer word.
+function convertHindiNumberWords(text) {
+  return String(text ?? "")
+    .split(/(\s+)/)
+    .map((token) => {
+      // Strip common punctuation stuck to the token before
+      // looking it up, then re-attach it.
+      const trimmed = token.trim();
+      if (!trimmed) return token;
+
+      const leadingPunct = token.match(/^[^\p{L}\p{N}]*/u)?.[0] || "";
+      const trailingPunct = token.match(/[^\p{L}\p{N}]*$/u)?.[0] || "";
+      const core = token.slice(
+        leadingPunct.length,
+        token.length - trailingPunct.length
+      );
+
+      if (Object.prototype.hasOwnProperty.call(HINDI_NUMBER_WORDS, core)) {
+        return leadingPunct + HINDI_NUMBER_WORDS[core] + trailingPunct;
+      }
+
+      return token;
+    })
+    .join("");
+}
+
+export function normalizeHindiNumerals(text) {
+  return convertHindiNumberWords(normalizeDevanagariDigits(text));
+}
+
+// ============================================================
+// UNICODE-SAFE "WORD BOUNDARY" FOR DEVANAGARI TEXT
+// ============================================================
+//
+// FIX (root cause #2): a plain `\bजोड़\b`-style regex NEVER
+// matches Devanagari text in JavaScript. \b is defined purely in
+// terms of ASCII "word characters" ([A-Za-z0-9_]); Devanagari
+// letters are NOT part of that class, so both sides of the
+// boundary are seen as "non-word" and \b requires exactly one
+// side to be a word character. Every \b-wrapped Hindi regex in
+// this file (operators, question phrases, greetings) was
+// therefore silently dead code — it looked correct but could
+// never fire, on any input, regardless of digit normalization.
+//
+// hindiWord() builds an equivalent boundary using Unicode-aware
+// lookaround (\p{L} = any letter, \p{N} = any number, in any
+// script) so Hindi keyword matching actually works.
+// ============================================================
+
+function hindiWord(pattern) {
+  return new RegExp(
+    `(?<![\\p{L}\\p{N}])(?:${pattern})(?![\\p{L}\\p{N}])`,
+    "gu"
+  );
+}
 
 // ============================================================
 // BASIC HELPERS
@@ -72,7 +198,14 @@ function safeEvaluate(expression, scope = {}) {
 // ============================================================
 
 export function clean(input) {
-  let text = String(input ?? "")
+  // FIX: normalize Devanagari digits / Hindi number-words to
+  // ASCII digits FIRST, before anything else runs. Every regex
+  // below (and every downstream consumer of clean()'s output)
+  // tests against ASCII \d, so this has to happen up front or
+  // Hindi voice input never matches.
+  let text = normalizeHindiNumerals(String(input ?? ""));
+
+  text = text
     .toLowerCase()
     .replace(/[?]/g, "")
     .replace(/×/g, "*")
@@ -84,59 +217,172 @@ export function clean(input) {
     .replace(/√/g, "sqrt")
     .replace(/²/g, "^2")
     .replace(/³/g, "^3")
-    // FIX: the degree SYMBOL (°) is different from the word
-    // "degrees" — e.g. "sin 30°" from typed input. It was left
-    // untouched before, so it survived as a stray unparseable
-    // character. Convert it to the word so it flows through the
-    // same trig/unit logic used everywhere else in this file.
-    .replace(/(\d)\s*°/g, "$1 degrees");
+    .replace(/°/g, " degrees ");
 
-  // ----------------------------------------------------------
+  // ==========================================================
+  // HINDI / HINGLISH QUESTION WORDS
+  // ==========================================================
+
+  text = text
+    // Hindi — Unicode-safe boundary (see hindiWord() above; \b
+    // does not work on Devanagari). Multi-word phrases go first
+    // so a bare word inside a longer phrase doesn't get replaced
+    // out from under the phrase match.
+    .replace(hindiWord("कितना\\s+होता\\s+है"), "")
+    .replace(hindiWord("कितना\\s+होगा"), "")
+    .replace(hindiWord("कितने\\s+हैं"), "")
+    .replace(hindiWord("कितना\\s+है"), "")
+    .replace(hindiWord("बताओ"), "")
+    .replace(hindiWord("बताइए"), "")
+    .replace(hindiWord("निकालो"), "")
+    .replace(hindiWord("निकालिए"), "")
+    .replace(hindiWord("हल\\s+करो"), "")
+    .replace(hindiWord("हल\\s+कीजिए"), "")
+    .replace(hindiWord("गणना\\s+करो"), "")
+
+    // Hinglish
+    .replace(/\bkitna\s+hota\s+hai\b/g, "")
+    .replace(/\bkitna\s+hoga\b/g, "")
+    .replace(/\bkitne\s+hain\b/g, "")
+    .replace(/\bkitna\s+hai\b/g, "")
+    .replace(/\bbatao\b/g, "")
+    .replace(/\bbataiye\b/g, "")
+    .replace(/\bnikalo\b/g, "")
+    .replace(/\bnikaliye\b/g, "")
+    .replace(/\bhal\s+karo\b/g, "")
+    .replace(/\bsolve\s+karo\b/g, "");
+
+  // ==========================================================
+  // HINDI / HINGLISH OPERATORS
+  // ==========================================================
+
+  text = text
+    // Addition — Unicode-safe boundary for Devanagari
+    .replace(hindiWord("जोड़ो"), "+")
+    .replace(hindiWord("जोड़"), "+")
+    .replace(/\bjodo\b/g, "+")
+    .replace(/\bjod\b/g, "+")
+    .replace(/\bplus\b/g, "+")
+
+    // Subtraction
+    .replace(hindiWord("घटाओ"), "-")
+    .replace(hindiWord("घटाना"), "-")
+    .replace(/\bghatao\b/g, "-")
+    .replace(/\bghatana\b/g, "-")
+    .replace(/\bminus\b/g, "-")
+
+    // Multiplication — "गुणा करो" (longer phrase) BEFORE bare
+    // "गुणा", or the bare rule fires first and leaves a stray
+    // "करो" token sitting in the expression.
+    .replace(hindiWord("गुणा\\s+करो"), "*")
+    .replace(hindiWord("गुणा"), "*")
+    .replace(/\bguna\s+karo\b/g, "*")
+    .replace(/\bguna\b/g, "*")
+    .replace(/\bmultiplied\s+by\b/g, "*")
+    .replace(/\btimes\b/g, "*")
+
+    // Division — same ordering fix as multiplication above.
+    .replace(hindiWord("भाग\\s+करो"), "/")
+    .replace(hindiWord("भाग"), "/")
+    .replace(/\bbhag\s+karo\b/g, "/")
+    .replace(/\bbhag\b/g, "/")
+    .replace(/\bdivided\s+by\b/g, "/")
+    .replace(/\bover\b/g, "/");
+
+  // ==========================================================
+  // HINDI / HINGLISH PERCENTAGE
+  // ==========================================================
+
+  text = text
+    // Longer phrase first — Unicode-safe boundary (see above).
+    .replace(hindiWord("प्रतिशत\\s+का"), "percent of")
+    .replace(hindiWord("प्रतिशत"), "percent")
+    .replace(/\bpercent\s+ka\b/g, "percent of")
+    .replace(/\bpercent\s+of\b/g, "percent of");
+
+  // "840 ka 18 percent" -> "18 percent of 840"
+  let match = text.match(
+    /(-?\d+(?:\.\d+)?)\s*(?:का|ka)\s*(-?\d+(?:\.\d+)?)\s*percent\b/i
+  );
+
+  if (match) {
+    const value = match[1];
+    const percent = match[2];
+
+    text = text.replace(
+      match[0],
+      `${percent} percent of ${value}`
+    );
+  }
+
+  // "840 का 18%" -> "18% of 840"
+  match = text.match(
+    /(-?\d+(?:\.\d+)?)\s*(?:का|के|की|ka|ke|ki)\s*(-?\d+(?:\.\d+)?)\s*%/i
+  );
+
+  if (match) {
+    const value = match[1];
+    const percent = match[2];
+
+    text = text.replace(
+      match[0],
+      `${percent}% of ${value}`
+    );
+  }
+
+  // ==========================================================
+  // ENGLISH QUESTION WORDS
+  // ==========================================================
+
+  text = text
+    .replace(/\bwhat\s+is\b/g, "")
+    .replace(/\bwhat's\b/g, "")
+    .replace(/\bcalculate\b/g, "")
+    .replace(/\bcompute\b/g, "")
+    .replace(/\bevaluate\b/g, "")
+    .replace(/\bfind\s+the\s+value\s+of\b/g, "")
+    .replace(/\bfind\b/g, "")
+    .replace(/\bplease\b/g, "");
+
+  // ==========================================================
   // ROOTS
-  // ----------------------------------------------------------
+  // ==========================================================
 
-  // square root of 144
   text = text.replace(
     /\bsquare\s+root\s+of\s+(-?\d+(?:\.\d+)?)\b/g,
     "sqrt($1)"
   );
 
-  // square root 144
   text = text.replace(
     /\bsquare\s+root\s+(-?\d+(?:\.\d+)?)\b/g,
     "sqrt($1)"
   );
 
-  // sqrt of 144
   text = text.replace(
     /\bsqrt\s+of\s+(-?\d+(?:\.\d+)?)\b/g,
     "sqrt($1)"
   );
 
-  // cube root of 27
   text = text.replace(
     /\bcube\s+root\s+of\s+(-?\d+(?:\.\d+)?)\b/g,
     "cbrt($1)"
   );
 
-  // cube root 27
   text = text.replace(
     /\bcube\s+root\s+(-?\d+(?:\.\d+)?)\b/g,
     "cbrt($1)"
   );
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // POWERS
-  // ----------------------------------------------------------
+  // ==========================================================
 
-  // x squared / x square
   text = text
     .replace(/\bx\s+squared\b/g, "x^2")
     .replace(/\bx\s+square\b/g, "x^2")
     .replace(/\bx\s+cubed\b/g, "x^3")
     .replace(/\bx\s+cube\b/g, "x^3");
 
-  // number squared / number square
   text = text
     .replace(
       /(-?\d+(?:\.\d+)?)\s+squared\b/g,
@@ -145,10 +391,7 @@ export function clean(input) {
     .replace(
       /(-?\d+(?:\.\d+)?)\s+square\b/g,
       "($1)^2"
-    );
-
-  // number cubed / number cube
-  text = text
+    )
     .replace(
       /(-?\d+(?:\.\d+)?)\s+cubed\b/g,
       "($1)^3"
@@ -158,7 +401,6 @@ export function clean(input) {
       "($1)^3"
     );
 
-  // to the power of
   text = text.replace(
     /\bto\s+the\s+power\s+of\s+(-?\d+(?:\.\d+)?)\b/g,
     "^$1"
@@ -169,9 +411,9 @@ export function clean(input) {
     "^$1"
   );
 
-  // ----------------------------------------------------------
-  // OPERATORS
-  // ----------------------------------------------------------
+  // ==========================================================
+  // ENGLISH OPERATORS
+  // ==========================================================
 
   text = text
     .replace(/\bmultiplied\s+by\b/g, "*")
@@ -182,9 +424,9 @@ export function clean(input) {
     .replace(/\bplus\b/g, "+")
     .replace(/\bminus\b/g, "-");
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // EQUALITY
-  // ----------------------------------------------------------
+  // ==========================================================
 
   text = text
     .replace(/\bis\s+equals?\s+to\b/g, "=")
@@ -195,40 +437,44 @@ export function clean(input) {
     .replace(/\bequals\b/g, "=")
     .replace(/\bequal\b/g, "=");
 
-  // ----------------------------------------------------------
-  // QUESTION / COMMAND WORDS
-  // ----------------------------------------------------------
+  // ==========================================================
+  // SPOKEN NUMBER WORDS (English)
+  // ==========================================================
 
-  text = text
-    .replace(/\bwhat\s+is\b/g, "")
-    .replace(/\bwhat's\b/g, "")
-    .replace(/\bcalculate\b/g, "")
-    .replace(/\bcompute\b/g, "")
-    .replace(/\bevaluate\b/g, "")
-    .replace(/\bfind\s+the\s+value\s+of\b/g, "")
-    .replace(/\bfind\b/g, "")
-    .replace(/\bsolve\b/g, "")
-    .replace(/\bplease\b/g, "");
+  const numbers = {
+    zero: "0",
+    one: "1",
+    two: "2",
+    three: "3",
+    four: "4",
+    five: "5",
+    six: "6",
+    seven: "7",
+    eight: "8",
+    nine: "9",
+    ten: "10",
+    eleven: "11",
+    twelve: "12",
+    thirteen: "13",
+    fourteen: "14",
+    fifteen: "15",
+    sixteen: "16",
+    seventeen: "17",
+    eighteen: "18",
+    nineteen: "19",
+    twenty: "20"
+  };
 
-  // ----------------------------------------------------------
-  // IMPLICIT MULTIPLICATION
-  // ----------------------------------------------------------
+  for (const [word, value] of Object.entries(numbers)) {
+    text = text.replace(
+      new RegExp(`\\b${word}\\b`, "g"),
+      value
+    );
+  }
 
-  // 2 x -> 2*x
-  text = text.replace(
-    /(\d+(?:\.\d+)?)\s+x\b/g,
-    "$1*x"
-  );
-
-  // 2x -> 2*x
-  text = text.replace(
-    /(\d+(?:\.\d+)?)x\b/g,
-    "$1*x"
-  );
-
-  // ----------------------------------------------------------
-  // WHITESPACE
-  // ----------------------------------------------------------
+  // ==========================================================
+  // CLEANUP
+  // ==========================================================
 
   text = text
     .replace(/\s+/g, " ")
@@ -244,10 +490,13 @@ export function clean(input) {
 // ============================================================
 
 function naturalToMath(input) {
+  // clean() already runs Hindi numeral normalization, so `x`
+  // here is already ASCII-digit-safe.
   let x = clean(input);
 
   // ----------------------------------------------------------
-  // SPOKEN NUMBER WORDS
+  // SPOKEN NUMBER WORDS (English; Hindi ones are converted by
+  // clean()/normalizeHindiNumerals() already)
   // ----------------------------------------------------------
 
   const numbers = {
@@ -358,7 +607,38 @@ function naturalToMath(input) {
 // ============================================================
 
 function solvePercentage(input) {
-  const original = input.trim();
+  // FIX: normalize Hindi digits/number-words before any regex
+  // that tests \d — previously this ran on the raw, un-cleaned
+  // `input`, so Devanagari digits like "५" never matched.
+  const original = normalizeHindiNumerals(input).trim();
+
+    // ==========================================================
+  // HINDI / HINGLISH PERCENTAGE
+  // ==========================================================
+
+  let hindiMatch = original.match(
+    /(-?\d+(?:\.\d+)?)\s*(?:का|के|की|का|ka|ke|ki)\s*(-?\d+(?:\.\d+)?)\s*(?:%|प्रतिशत|percent)/i
+  );
+
+  if (hindiMatch) {
+    const value = Number(hindiMatch[1]);
+    const percent = Number(hindiMatch[2]);
+
+    const result = value * percent / 100;
+
+    return {
+      type: "percentage",
+      title: "PERCENTAGE",
+      expression: original,
+      result: fmt(result),
+      numericResult: result,
+      steps: [
+        `${fmt(percent)}% of ${fmt(value)}`,
+        `(${fmt(percent)} / 100) × ${fmt(value)}`,
+        `= ${fmt(result)}`
+      ]
+    };
+  }
 
   // 25 percent of 480
   let match = original.match(
@@ -564,6 +844,7 @@ function solveOneVariableEquation(input) {
     input
   );
 
+  // clean() normalizes Hindi digits/number-words internally.
   let text = clean(input)
     .replace(/\bsolve\b/g, "")
     .replace(/\bfor\s+x\b/g, "")
@@ -1139,7 +1420,15 @@ const TRIG_FN_MAP = {
 };
 
 function solveTrig(input) {
-  const text = input
+  // FIX: normalize Hindi digits before matching the angle, and
+  // also accept "डिग्री" (Hindi for "degrees") as a unit, since
+  // hi-IN recognition will transcribe "degrees" that way when
+  // the user actually says it in Hindi.
+  const normalized = normalizeHindiNumerals(input)
+    .replace(/डिग्री/g, "degrees")
+    .replace(/रेडियन/g, "radians");
+
+  const text = normalized
     .toLowerCase()
     .trim();
 
@@ -1214,8 +1503,9 @@ function solveTrig(input) {
 // ============================================================
 
 function solveDerivative(input) {
+  // FIX: normalize Hindi digits before lowercase/parse.
   const text =
-    input.toLowerCase();
+    normalizeHindiNumerals(input).toLowerCase();
 
   if (
     !(
@@ -1300,8 +1590,9 @@ function simpsonIntegral(
 }
 
 function solveIntegral(input) {
+  // FIX: normalize Hindi digits before lowercase/parse.
   const text =
-    input.toLowerCase();
+    normalizeHindiNumerals(input).toLowerCase();
 
   if (
     !(
@@ -1402,8 +1693,10 @@ function solveIntegral(input) {
 // ============================================================
 
 function extractNumbers(input) {
+  // FIX: normalize Hindi digits before scanning for numbers —
+  // previously "५, १०, १५" would return an empty array.
   const matches =
-    String(input).match(
+    normalizeHindiNumerals(String(input)).match(
       /-?\d+(?:\.\d+)?/g
     );
 
@@ -1413,8 +1706,9 @@ function extractNumbers(input) {
 }
 
 function solveStatistics(input) {
+  // FIX: normalize Hindi digits before lowercase/parse.
   const text =
-    input.toLowerCase();
+    normalizeHindiNumerals(input).toLowerCase();
 
   if (
     !(
@@ -1593,8 +1887,9 @@ function solveStatistics(input) {
 // ============================================================
 
 function solveCombinatorics(input) {
+  // FIX: normalize Hindi digits before lowercase/parse.
   const text =
-    input.toLowerCase();
+    normalizeHindiNumerals(input).toLowerCase();
 
   let match =
     text.match(
@@ -1661,8 +1956,12 @@ function solveCombinatorics(input) {
 // ============================================================
 
 function extractMatrix(input) {
+  // FIX: normalize Hindi digits inside bracket notation too,
+  // e.g. [[१, २], [३, ४]].
+  const normalized = normalizeHindiNumerals(input);
+
   const match =
-    input.match(
+    normalized.match(
       /\[\s*\[[\s\S]*\]\s*\]/
     );
 
@@ -1681,7 +1980,7 @@ function extractMatrix(input) {
 
 function solveMatrix(input) {
   const text =
-    input.toLowerCase();
+    normalizeHindiNumerals(input).toLowerCase();
 
   if (
     !(
@@ -1768,8 +2067,11 @@ function solveMatrix(input) {
 // ============================================================
 
 function extractVectors(input) {
+  // FIX: normalize Hindi digits inside bracket notation.
+  const normalized = normalizeHindiNumerals(input);
+
   const matches =
-    input.match(
+    normalized.match(
       /\[[^\]]+\]/g
     );
 
@@ -1790,7 +2092,7 @@ function extractVectors(input) {
 
 function solveVector(input) {
   const text =
-    input.toLowerCase();
+    normalizeHindiNumerals(input).toLowerCase();
 
   if (
     !(
@@ -1892,8 +2194,9 @@ function solveVector(input) {
 // ============================================================
 
 function solveGeometry(input) {
+  // FIX: normalize Hindi digits before lowercase/parse.
   const text =
-    input.toLowerCase();
+    normalizeHindiNumerals(input).toLowerCase();
 
   // Circle area
   let match =
@@ -1961,8 +2264,9 @@ function solveGeometry(input) {
 // ============================================================
 
 function solveLimit(input) {
+  // FIX: normalize Hindi digits before lowercase/parse.
   const text =
-    input.toLowerCase();
+    normalizeHindiNumerals(input).toLowerCase();
 
   if (!text.includes("limit")) {
     return null;
@@ -2135,6 +2439,7 @@ function rref(A) {
 }
 
 function solveSystem(input) {
+  // clean() normalizes Hindi digits/number-words internally.
   const text =
     clean(input);
 
@@ -2286,25 +2591,36 @@ function solveSystem(input) {
 // ============================================================
 
 export function isMathQuestion(input) {
-  const text =
-    String(input ?? "")
-      .toLowerCase()
-      .trim();
+  // FIX: this is the gatekeeper. Every question passes through
+  // here first, and previously it tested ASCII /\d/ against the
+  // raw transcript — so any question spoken in Hindi where
+  // hi-IN recognition returned Devanagari digits (or spelled-out
+  // Hindi number words) was invisible to every check below and
+  // got routed to the AI backend instead of solved locally.
+  // Normalizing here fixes the gate for every downstream check
+  // in this function AND ensures solveMath() gets a chance to
+  // run its own solvers (which are independently normalized too).
+  const raw = normalizeHindiNumerals(String(input ?? ""));
+  const text = raw.toLowerCase().trim();
 
   if (!text) {
     return false;
   }
 
-  // Explicit mathematical symbols
+  // ==========================================================
+  // DIRECT MATHEMATICAL EXPRESSION
+  // ==========================================================
+
   if (
-    /[0-9]\s*[\+\-\*\/\^=]\s*[0-9a-z]/i.test(
-      text
-    )
+    /\d+\s*[\+\-\*\/\^=]\s*\d+/.test(text)
   ) {
     return true;
   }
 
-  // Numbers + operators
+  // ==========================================================
+  // HINDI / HINGLISH ARITHMETIC
+  // ==========================================================
+
   if (
     /\d+\s*(plus|minus|times|multiplied|divided|over)\s*\d+/i.test(
       text
@@ -2313,46 +2629,98 @@ export function isMathQuestion(input) {
     return true;
   }
 
-  // Roots
+  if (
+    /\d+\s*(jod|jodo|ghatao|guna|bhag)\b/i.test(
+      text
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /[0-9]+\s*(जोड़|जोड़ो|घटाओ|गुणा|भाग)/u.test(
+      text
+    )
+  ) {
+    return true;
+  }
+
+  // ==========================================================
+  // HINDI / HINGLISH "KITNA" QUESTIONS
+  // ==========================================================
+
+  if (
+    /kitna\s+(hota|hoga|hai)/i.test(text) ||
+    /kitne\s+hain/i.test(text) ||
+    /कितना\s+(होता|होगा|है)/u.test(text) ||
+    /कितने\s+हैं/u.test(text)
+  ) {
+    // Only classify as math when numbers are present.
+    if (/\d/.test(text)) {
+      return true;
+    }
+  }
+
+  // ==========================================================
+  // PERCENTAGE
+  // ==========================================================
+
+  if (
+    /%/.test(text) ||
+    /\bpercent\b/i.test(text) ||
+    /\bप्रतिशत\b/u.test(text)
+  ) {
+    return true;
+  }
+
+  // ==========================================================
+  // ROOTS
+  // ==========================================================
+
   if (
     /\b(square\s+root|cube\s+root|sqrt|cbrt)\b/i.test(
       text
-    )
+    ) ||
+    /वर्गमूल|घनमूल/u.test(text)
   ) {
     return true;
   }
 
-  // Powers
+  // ==========================================================
+  // POWERS
+  // ==========================================================
+
   if (
     /\b(square|squared|cube|cubed|power)\b/i.test(
       text
-    )
+    ) ||
+    /वर्ग|घन|घात/u.test(text)
   ) {
     return true;
   }
 
-  // Equations
+  // ==========================================================
+  // EQUATIONS
+  // ==========================================================
+
+  if (
+    text.includes("=") &&
+    /\d|x|y|z/i.test(text)
+  ) {
+    return true;
+  }
+
   if (
     /\bsolve\b/i.test(text) &&
-    (
-      text.includes("=") ||
-      /\bx\b/i.test(text)
-    )
+    /\bx\b/i.test(text)
   ) {
     return true;
   }
 
-  // Percentages
-  if (
-    /%|\bpercent\b/i.test(text)
-  ) {
-    return true;
-  }
+  // ==========================================================
+  // TRIGONOMETRY
+  // ==========================================================
 
-  // Trigonometry
-  // FIX: previously only sin/sine/cos/cosine/tan/tangent were
-  // recognized here, so questions like "cot 60" or "sec of 45"
-  // never even got flagged as math at all.
   if (
     /\b(sin|sine|cos|cosine|tan|tangent|sec|secant|csc|cosec|cosecant|cot|cotan|cotangent)\b/i.test(
       text
@@ -2361,13 +2729,18 @@ export function isMathQuestion(input) {
     return true;
   }
 
-  // Degree symbol / word — often the only math signal on a bare
-  // trig question with no other keyword.
-  if (/\bdegrees?\b/i.test(text) || /°/.test(text)) {
+  if (
+    /\bdegrees?\b/i.test(text) ||
+    /°/.test(text) ||
+    /डिग्री/u.test(text)
+  ) {
     return true;
   }
 
-  // Calculus
+  // ==========================================================
+  // CALCULUS
+  // ==========================================================
+
   if (
     /\b(derivative|differentiate|integral|integrate|limit)\b/i.test(
       text
@@ -2376,7 +2749,10 @@ export function isMathQuestion(input) {
     return true;
   }
 
-  // Statistics
+  // ==========================================================
+  // STATISTICS
+  // ==========================================================
+
   if (
     /\b(mean|median|mode|variance|standard deviation)\b/i.test(
       text
@@ -2385,7 +2761,10 @@ export function isMathQuestion(input) {
     return true;
   }
 
-  // Matrix/vector
+  // ==========================================================
+  // MATRIX / VECTOR
+  // ==========================================================
+
   if (
     /\b(matrix|determinant|transpose|inverse|vector|dot product|cross product|magnitude)\b/i.test(
       text
@@ -2394,7 +2773,10 @@ export function isMathQuestion(input) {
     return true;
   }
 
-  // Geometry
+  // ==========================================================
+  // GEOMETRY
+  // ==========================================================
+
   if (
     /\b(area|perimeter|radius|diameter|circumference)\b/i.test(
       text
@@ -2419,8 +2801,13 @@ export function solveMath(input) {
     return null;
   }
 
+  // FIX: normalize once up front so every sub-solver below
+  // (even ones that read `original` directly) sees ASCII
+  // digits. Individual sub-solvers also normalize defensively
+  // on their own, so this is belt-and-suspenders, not a
+  // single point of failure.
   const original =
-    input.trim();
+    normalizeHindiNumerals(input.trim()).trim();
 
   console.log(
     "======================================"
@@ -2432,6 +2819,11 @@ export function solveMath(input) {
 
   console.log(
     "RAW INPUT:",
+    input
+  );
+
+  console.log(
+    "NORMALIZED INPUT:",
     original
   );
 
@@ -2470,9 +2862,22 @@ export function solveMath(input) {
     // --------------------------------------------------------
     // 2. PERCENTAGE
     // --------------------------------------------------------
+    //
+    // FIX: solvePercentage's own Hindi regex only recognizes the
+    // "VALUE का PERCENT प्रतिशत" word order (e.g. "100 का 15
+    // प्रतिशत"). The reversed, equally common spoken order —
+    // "PERCENT प्रतिशत का VALUE" (e.g. "15 प्रतिशत का 100") —
+    // does NOT match it, because solvePercentage runs on the raw
+    // `original` text, not on clean()'s output. clean() already
+    // correctly turns "15 प्रतिशत का 100" into "15 percent of
+    // 100" (see the प्रतिशत block above), which DOES match
+    // solvePercentage's English "percent of" regex — it just was
+    // never being tried. Falling back to the cleaned text picks
+    // up that case for free, with no new regex needed.
 
     const percentage =
-      solvePercentage(original);
+      solvePercentage(original) ||
+      solvePercentage(cleaned);
 
     if (percentage) {
       return percentage;
@@ -2685,6 +3090,7 @@ if (
   window.ATLAS_MATH_TEST = {
     clean,
     solveMath,
-    isMathQuestion
+    isMathQuestion,
+    normalizeHindiNumerals
   };
 }
