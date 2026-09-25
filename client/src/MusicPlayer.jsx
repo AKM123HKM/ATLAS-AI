@@ -38,7 +38,7 @@ const localSongs = [
 const MUSIC_SEARCH_URL =
   "https://atlas-ai-1wd9.onrender.com/api/music/search";
 
-export default function MusicPlayer({ onClose, songToPlay }) {
+export default function MusicPlayer({ onClose, songToPlay, controlsRef }) {
   // "local" (playing one of the 3 bundled mp3s) or "youtube"
   const [mode, setMode] = useState(null);
 
@@ -360,6 +360,64 @@ export default function MusicPlayer({ onClose, songToPlay }) {
       setPlaying(false);
     }
   };
+
+  const setPlayback = async (shouldPlay) => {
+    if (!currentSong || playing === shouldPlay) return;
+    if (mode === "youtube") {
+      if (!ytPlayerRef.current) return;
+      if (shouldPlay) ytPlayerRef.current.playVideo();
+      else ytPlayerRef.current.pauseVideo();
+      return;
+    }
+    if (!audioRef.current) return;
+    if (shouldPlay) {
+      try {
+        await audioRef.current.play();
+        setPlaying(true);
+      } catch (error) {
+        console.error("VOICE PLAY COMMAND ERROR:", error);
+      }
+    } else {
+      audioRef.current.pause();
+      setPlaying(false);
+    }
+  };
+
+  const changeTrack = (direction) => {
+    if (mode === "youtube" && onlineResults.length) {
+      const currentIndex = onlineResults.findIndex(
+        (video) => video.videoId === currentSong?.videoId,
+      );
+      const nextIndex = currentIndex < 0
+        ? 0
+        : (currentIndex + direction + onlineResults.length) % onlineResults.length;
+      selectOnlineSong(onlineResults[nextIndex]);
+      return;
+    }
+
+    const currentIndex = localSongs.findIndex(
+      (song) => song.id === currentSong?.id || song.title === currentSong?.title,
+    );
+    const nextIndex = currentIndex < 0
+      ? (direction > 0 ? 0 : localSongs.length - 1)
+      : (currentIndex + direction + localSongs.length) % localSongs.length;
+    selectLocalSong(localSongs[nextIndex]);
+  };
+
+  useEffect(() => {
+    if (!controlsRef) return undefined;
+    controlsRef.current = {
+      play: () => setPlayback(true),
+      pause: () => setPlayback(false),
+      toggle: togglePlay,
+      next: () => changeTrack(1),
+      previous: () => changeTrack(-1),
+      close: handleClose,
+    };
+    return () => {
+      controlsRef.current = null;
+    };
+  });
 
   // =========================================================
   // PROGRESS (local <audio>)

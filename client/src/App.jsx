@@ -242,6 +242,9 @@ function App() {
 
   const recognitionRef = useRef(null);
   const wakeWordRecognitionRef = useRef(null);
+  const musicCommandRecognitionRef = useRef(null);
+  const musicCommandRestartRef = useRef(null);
+  const musicControlsRef = useRef(null);
   const wakeRestartTimerRef = useRef(null);
   const wakeSessionIdRef = useRef(0);
 
@@ -263,6 +266,90 @@ function App() {
   useEffect(() => {
     showMathRef.current = showMath;
   }, [showMath]);
+
+  // Keep voice back commands available in dialogs and music transport
+  // commands available while the music overlay is open.
+  useEffect(() => {
+    const hasVoiceOverlay = showMusic || showWeather || showMath;
+    if (!hasVoiceOverlay) return undefined;
+
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return undefined;
+
+    let stopped = false;
+    const listenForMusicCommand = () => {
+      if (stopped || musicCommandRecognitionRef.current) return;
+      const recognition = new SpeechRecognition();
+      recognition.lang = getSpeechLang(languageRef.current);
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      musicCommandRecognitionRef.current = recognition;
+
+      recognition.onresult = (event) => {
+        const command = event.results[0][0].transcript.toLowerCase().trim();
+        const controls = musicControlsRef.current;
+
+        if (/\b(back|go back|close|return)\b|वापस|बंद करो/.test(command)) {
+          if (showMusicRef.current) controls?.close();
+          else {
+            setShowWeather(false);
+            setShowMath(false);
+            setMathResult(null);
+            isProcessingRef.current = false;
+            setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
+            setTimeout(() => startWakeWordDetection(), 300);
+          }
+        } else if (showMusicRef.current && /\b(pause|stop)\b|रोक(ो| दीजिए)?/.test(command)) {
+          controls?.pause();
+        } else if (showMusicRef.current && /\b(play|resume)\b|चलाओ|शुरू करो/.test(command)) {
+          controls?.play();
+        } else if (showMusicRef.current && /\b(next|skip)\b|अगला/.test(command)) {
+          controls?.next();
+        } else if (showMusicRef.current && /\b(previous|prev)\b|पिछला/.test(command)) {
+          controls?.previous();
+        }
+      };
+
+      recognition.onerror = (event) => {
+        if (event.error !== "no-speech" && event.error !== "aborted") {
+          console.log("ATLAS music command recognition:", event.error);
+        }
+      };
+      recognition.onend = () => {
+        if (musicCommandRecognitionRef.current === recognition) {
+          musicCommandRecognitionRef.current = null;
+        }
+        if (!stopped && (showMusicRef.current || showWeatherRef.current || showMathRef.current)) {
+          musicCommandRestartRef.current = setTimeout(() => {
+            musicCommandRestartRef.current = null;
+            listenForMusicCommand();
+          }, 350);
+        }
+      };
+
+      try {
+        recognition.start();
+      } catch (error) {
+        musicCommandRecognitionRef.current = null;
+        console.log("ATLAS music command listener start:", error);
+      }
+    };
+
+    listenForMusicCommand();
+    return () => {
+      stopped = true;
+      if (musicCommandRestartRef.current) {
+        clearTimeout(musicCommandRestartRef.current);
+        musicCommandRestartRef.current = null;
+      }
+      if (musicCommandRecognitionRef.current) {
+        musicCommandRecognitionRef.current.onend = null;
+        musicCommandRecognitionRef.current.stop();
+        musicCommandRecognitionRef.current = null;
+      }
+    };
+  }, [showMusic, showWeather, showMath]);
 
   const isProcessingRef = useRef(false);
 
@@ -761,6 +848,23 @@ function App() {
 
     const lowerQuestion = question.toLowerCase().trim();
 
+    if (/^(back|go back|return|return to atlas|close|वापस|पीछे चलो|बंद करो)[.!?।]*$/.test(lowerQuestion)) {
+      if (showMusicRef.current) {
+        musicControlsRef.current?.close();
+      } else {
+        setShowResults(false);
+        setResult(null);
+        setAiText("");
+        setUserText("");
+        setShowWeather(false);
+        setShowMath(false);
+        setMathResult(null);
+        isProcessingRef.current = false;
+        setTimeout(() => startWakeWordDetection(), 300);
+      }
+      return;
+    }
+
     if (handleMathCommand(question)) {
       return;
     }
@@ -947,6 +1051,15 @@ function App() {
       transcript = transcript.toLowerCase().trim();
 
       console.log("ATLAS WAKE HEARD:", transcript);
+
+      if (showResults && /\b(back|go back|return|close)\b/.test(transcript)) {
+        setShowResults(false);
+        setResult(null);
+        setAiText("");
+        setUserText("");
+        setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
+        return;
+      }
 
       const wakeDetected = matchesWakeWord(transcript, languageRef.current);
 
@@ -1224,6 +1337,7 @@ function App() {
       {showMusic && (
         <MusicPlayer
           songToPlay={songToPlay}
+          controlsRef={musicControlsRef}
           onClose={() => {
             setShowMusic(false);
 

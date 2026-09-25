@@ -126,7 +126,7 @@ const english = {
 
     thankYou: {
       title: "ATLAS",
-      answer: "You're welcome. I am always ready for your next question.",
+      answer: "You're welcome. I am always ready for your next question.", 
       paragraphs: [
         "You're welcome.",
         "I am always ready for your next question.",
