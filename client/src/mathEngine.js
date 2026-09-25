@@ -274,8 +274,13 @@ export function clean(input) {
     // Multiplication — "गुणा करो" (longer phrase) BEFORE bare
     // "गुणा", or the bare rule fires first and leaves a stray
     // "करो" token sitting in the expression.
+    // "गुना" is also accepted: hi-IN speech recognition very
+    // commonly transcribes "गुणा" (retroflex ण) as "गुना" (dental
+    // न) since the two sound almost identical spoken aloud.
     .replace(hindiWord("गुणा\\s+करो"), "*")
+    .replace(hindiWord("गुना\\s+करो"), "*")
     .replace(hindiWord("गुणा"), "*")
+    .replace(hindiWord("गुना"), "*")
     .replace(/\bguna\s+karo\b/g, "*")
     .replace(/\bguna\b/g, "*")
     .replace(/\bmultiplied\s+by\b/g, "*")
@@ -2638,7 +2643,7 @@ export function isMathQuestion(input) {
   }
 
   if (
-    /[0-9]+\s*(जोड़|जोड़ो|घटाओ|गुणा|भाग)/u.test(
+    /[0-9]+\s*(जोड़|जोड़ो|घटाओ|गुणा|गुना|भाग)/u.test(
       text
     )
   ) {
