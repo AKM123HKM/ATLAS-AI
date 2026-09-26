@@ -85,21 +85,10 @@ export function detectTextLanguage(text) {
 // -----------------------------------------------------------
 
 export function matchesWakeWord(transcript, languageCode) {
+  const pack = getLanguagePack(languageCode);
   const lower = (transcript || "").toLowerCase().trim();
-  return Object.values(LANGUAGES).some((pack) =>
-    pack.wakeWords.some((phrase) => lower.includes(phrase)),
-  );
-}
 
-export function detectWakeWordLanguage(transcript) {
-  const lower = (transcript || "").toLowerCase().trim();
-  if (getLanguagePack("hi").wakeWords.some((phrase) => lower.includes(phrase))) {
-    return "hi";
-  }
-  if (getLanguagePack("en").wakeWords.some((phrase) => lower.includes(phrase))) {
-    return "en";
-  }
-  return null;
+  return pack.wakeWords.some((phrase) => lower.includes(phrase));
 }
 
 // -----------------------------------------------------------

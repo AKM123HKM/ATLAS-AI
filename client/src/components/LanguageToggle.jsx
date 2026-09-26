@@ -1,40 +1,42 @@
-import React from "react";
 import "./LanguageToggle.css";
 
-function LanguageToggle({ language, onChange }) {
+// =========================================================
+// A.T.L.A.S — LANGUAGE TOGGLE
+// Controlled component: App.jsx owns `language` state and
+// passes it down, same pattern as every other piece of shared
+// state in this app (showMusic, showWeather, etc.)
+// =========================================================
+
+export default function LanguageToggle({ language, onChange }) {
   return (
-    <div className="language-toggle-wrapper">
-      <div className="language-toggle">
+    <div className="lang-toggle" role="group" aria-label="Language">
+      <span
+        className="lang-toggle-thumb"
+        style={{
+          transform:
+            language === "hi" ? "translateX(100%)" : "translateX(0%)",
+        }}
+      />
 
-        <button
-          type="button"
-          className={`language-option ${
-            language === "en" ? "active" : ""
-          }`}
-          onClick={() => onChange("en")}
-          aria-label="Switch to English"
-        >
-          <span className="language-code">EN</span>
-          <span className="language-name">English</span>
-        </button>
+      <button
+        type="button"
+        className={`lang-toggle-btn ${
+          language === "en" ? "lang-active" : ""
+        }`}
+        onClick={() => onChange("en")}
+      >
+        ENGLISH
+      </button>
 
-        <div className="language-divider" />
-
-        <button
-          type="button"
-          className={`language-option ${
-            language === "hi" ? "active" : ""
-          }`}
-          onClick={() => onChange("hi")}
-          aria-label="Switch to Hindi"
-        >
-          <span className="language-code">हि</span>
-          <span className="language-name">हिन्दी</span>
-        </button>
-
-      </div>
+      <button
+        type="button"
+        className={`lang-toggle-btn ${
+          language === "hi" ? "lang-active" : ""
+        }`}
+        onClick={() => onChange("hi")}
+      >
+        हिन्दी
+      </button>
     </div>
   );
 }
-
-export default LanguageToggle;

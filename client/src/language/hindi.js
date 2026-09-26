@@ -34,6 +34,8 @@ const hindi = {
 
   greeting: "नमस्ते।",
 
+  readMoreOnScreen: "पूरी जानकारी आपकी स्क्रीन पर है।",
+
   voiceHintIdle: 'बोलने के लिए टैप करें · कहें "नमस्ते"',
   voiceHintListening: "सुन रहा हूँ...",
 

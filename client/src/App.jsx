@@ -225,7 +225,8 @@ function App() {
   const [showWeather, setShowWeather] = useState(false);
   const [showMath, setShowMath] = useState(false);
   const [mathResult, setMathResult] = useState(null);
-  const [weatherLocation, setWeatherLocation] = useState("Greater Noida");
+  const [weatherLocation, setWeatherLocation] =
+    useState("Greater Noida");
   const [weatherCoords, setWeatherCoords] = useState(null);
 
   const [booted, setBooted] = useState(false);
@@ -241,10 +242,9 @@ function App() {
   const [listening, setListening] = useState(false);
 
   const recognitionRef = useRef(null);
+  const overlayRecognitionRef = useRef(null);
+  const overlayRestartTimerRef = useRef(null);
   const wakeWordRecognitionRef = useRef(null);
-  const musicCommandRecognitionRef = useRef(null);
-  const musicCommandRestartRef = useRef(null);
-  const musicControlsRef = useRef(null);
   const wakeRestartTimerRef = useRef(null);
   const wakeSessionIdRef = useRef(0);
 
@@ -267,90 +267,6 @@ function App() {
     showMathRef.current = showMath;
   }, [showMath]);
 
-  // Keep voice back commands available in dialogs and music transport
-  // commands available while the music overlay is open.
-  useEffect(() => {
-    const hasVoiceOverlay = showMusic || showWeather || showMath;
-    if (!hasVoiceOverlay) return undefined;
-
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return undefined;
-
-    let stopped = false;
-    const listenForMusicCommand = () => {
-      if (stopped || musicCommandRecognitionRef.current) return;
-      const recognition = new SpeechRecognition();
-      recognition.lang = getSpeechLang(languageRef.current);
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      musicCommandRecognitionRef.current = recognition;
-
-      recognition.onresult = (event) => {
-        const command = event.results[0][0].transcript.toLowerCase().trim();
-        const controls = musicControlsRef.current;
-
-        if (/\b(back|go back|close|return)\b|वापस|बंद करो/.test(command)) {
-          if (showMusicRef.current) controls?.close();
-          else {
-            setShowWeather(false);
-            setShowMath(false);
-            setMathResult(null);
-            isProcessingRef.current = false;
-            setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
-            setTimeout(() => startWakeWordDetection(), 300);
-          }
-        } else if (showMusicRef.current && /\b(pause|stop)\b|रोक(ो| दीजिए)?/.test(command)) {
-          controls?.pause();
-        } else if (showMusicRef.current && /\b(play|resume)\b|चलाओ|शुरू करो/.test(command)) {
-          controls?.play();
-        } else if (showMusicRef.current && /\b(next|skip)\b|अगला/.test(command)) {
-          controls?.next();
-        } else if (showMusicRef.current && /\b(previous|prev)\b|पिछला/.test(command)) {
-          controls?.previous();
-        }
-      };
-
-      recognition.onerror = (event) => {
-        if (event.error !== "no-speech" && event.error !== "aborted") {
-          console.log("ATLAS music command recognition:", event.error);
-        }
-      };
-      recognition.onend = () => {
-        if (musicCommandRecognitionRef.current === recognition) {
-          musicCommandRecognitionRef.current = null;
-        }
-        if (!stopped && (showMusicRef.current || showWeatherRef.current || showMathRef.current)) {
-          musicCommandRestartRef.current = setTimeout(() => {
-            musicCommandRestartRef.current = null;
-            listenForMusicCommand();
-          }, 350);
-        }
-      };
-
-      try {
-        recognition.start();
-      } catch (error) {
-        musicCommandRecognitionRef.current = null;
-        console.log("ATLAS music command listener start:", error);
-      }
-    };
-
-    listenForMusicCommand();
-    return () => {
-      stopped = true;
-      if (musicCommandRestartRef.current) {
-        clearTimeout(musicCommandRestartRef.current);
-        musicCommandRestartRef.current = null;
-      }
-      if (musicCommandRecognitionRef.current) {
-        musicCommandRecognitionRef.current.onend = null;
-        musicCommandRecognitionRef.current.stop();
-        musicCommandRecognitionRef.current = null;
-      }
-    };
-  }, [showMusic, showWeather, showMath]);
-
   const isProcessingRef = useRef(false);
 
   const speechQueueRef = useRef([]);
@@ -368,7 +284,10 @@ function App() {
     setInteractionLog((prev) => {
       const entry = {
         id: Date.now() + Math.random(),
-        label: label.length > 46 ? label.slice(0, 46) + "…" : label,
+        label:
+          label.length > 46
+            ? label.slice(0, 46) + "…"
+            : label,
         time: new Date().toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
@@ -539,9 +458,18 @@ function App() {
 
     console.log("ATLAS MUSIC REQUEST:", command);
 
-    const genericFillers = ["", "a", "a song", "some", "something", "anything"];
+    const genericFillers = [
+      "",
+      "a",
+      "a song",
+      "some",
+      "something",
+      "anything",
+    ];
 
-    const cleanedCommand = genericFillers.includes(command) ? null : command;
+    const cleanedCommand = genericFillers.includes(command)
+      ? null
+      : command;
 
     const pack = getLanguagePack(languageRef.current);
 
@@ -553,7 +481,7 @@ function App() {
     setStatus(
       cleanedCommand
         ? pack.systemStatus.searchingMusic + ": " + cleanedCommand.toUpperCase()
-        : pack.systemStatus.musicSystem,
+        : pack.systemStatus.musicSystem
     );
 
     return true;
@@ -589,13 +517,15 @@ function App() {
 
       const spoken =
         result.type === "equation" && result.solutions
-          ? result.solutions.length
-            ? pack.math.solutionIs(
-                result.solutions
-                  .map((v) => pack.math.equalsPart(result.variable || "x", v))
-                  .join(" " + (pack.code === "hi" ? "और" : "and") + " "),
-              )
-            : pack.math.noRealSolution
+          ? (result.solutions.length
+              ? pack.math.solutionIs(
+                  result.solutions
+                    .map((v) =>
+                      pack.math.equalsPart(result.variable || "x", v)
+                    )
+                    .join(" " + (pack.code === "hi" ? "और" : "and") + " ")
+                )
+              : pack.math.noRealSolution)
           : result.result
             ? pack.math.answerIs(result.result)
             : pack.math.analysisComplete;
@@ -676,18 +606,23 @@ function App() {
             question,
             language: languageRef.current,
           }),
-        },
+        }
       );
 
       if (!response.ok) {
-        throw new Error("Failed to connect to ATLAS backend");
+        throw new Error(
+          "Failed to connect to ATLAS backend"
+        );
       }
 
       const data = await response.json();
 
       return data;
     } catch (error) {
-      console.error("ATLAS API ERROR:", error);
+      console.error(
+        "ATLAS API ERROR:",
+        error
+      );
 
       return {
         title: pack.connectionError.title,
@@ -715,9 +650,12 @@ function App() {
     if (!text || !text.trim()) {
       isProcessingRef.current = false;
 
-      if (!showMusicRef.current && !showWeatherRef.current) {
+      if (
+        !showMusicRef.current &&
+        !showWeatherRef.current
+      ) {
         setStatus(
-          getLanguagePack(languageRef.current).systemStatus.waitingWake,
+          getLanguagePack(languageRef.current).systemStatus.waitingWake
         );
 
         setTimeout(() => {
@@ -733,18 +671,43 @@ function App() {
     const speechLang = getSpeechLang(languageRef.current);
     const voice = pickVoiceForLanguage(languageRef.current);
 
-    const cleanText = text.replace(/\n+/g, ". ").replace(/\s+/g, " ").trim();
+    const cleanText = text
+      .replace(/\n+/g, ". ")
+      .replace(/\s+/g, " ")
+      .trim();
 
-    const sentences = cleanText.match(/[^.!?।]+[.!?।]+/g) || [cleanText];
+    const allSentences =
+      cleanText.match(/[^.!?।]+[.!?।]+/g) ||
+      [cleanText];
+
+    // Only read the first few sentences aloud — a 250-word answer
+    // read start-to-finish is exhausting to listen to at an
+    // exhibition. The full text is already on screen (set by
+    // processQuestion before speak() is called), so this only
+    // changes what gets voiced, not what's shown.
+    const MAX_SPOKEN_SENTENCES = 3;
+    const wasTruncated = allSentences.length > MAX_SPOKEN_SENTENCES;
+    const sentences = allSentences.slice(0, MAX_SPOKEN_SENTENCES);
+
+    if (wasTruncated) {
+      sentences.push(
+        getLanguagePack(languageRef.current).readMoreOnScreen
+      );
+    }
 
     const chunks = [];
 
     let currentChunk = "";
 
     sentences.forEach((sentence) => {
-      if ((currentChunk + sentence).length > 350) {
+      if (
+        (currentChunk + sentence).length >
+        350
+      ) {
         if (currentChunk.trim()) {
-          chunks.push(currentChunk.trim());
+          chunks.push(
+            currentChunk.trim()
+          );
         }
 
         currentChunk = sentence;
@@ -754,7 +717,9 @@ function App() {
     });
 
     if (currentChunk.trim()) {
-      chunks.push(currentChunk.trim());
+      chunks.push(
+        currentChunk.trim()
+      );
     }
 
     speechQueueRef.current = chunks;
@@ -769,7 +734,8 @@ function App() {
   const speakNextChunk = (speechLang, voice) => {
     const queue = speechQueueRef.current;
 
-    const index = speechIndexRef.current;
+    const index =
+      speechIndexRef.current;
 
     if (index >= queue.length) {
       setSpeaking(false);
@@ -788,7 +754,9 @@ function App() {
 
       isProcessingRef.current = false;
 
-      setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
+      setStatus(
+        getLanguagePack(languageRef.current).systemStatus.waitingWake
+      );
 
       setTimeout(() => {
         startWakeWordDetection();
@@ -797,11 +765,15 @@ function App() {
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(queue[index]);
+    const utterance =
+      new SpeechSynthesisUtterance(
+        queue[index]
+      );
 
     utterance.lang = speechLang || getSpeechLang(languageRef.current);
 
-    const resolvedVoice = voice || pickVoiceForLanguage(languageRef.current);
+    const resolvedVoice =
+      voice || pickVoiceForLanguage(languageRef.current);
 
     if (resolvedVoice) {
       utterance.voice = resolvedVoice;
@@ -825,7 +797,10 @@ function App() {
     };
 
     utterance.onerror = (event) => {
-      console.error("Speech error:", event);
+      console.error(
+        "Speech error:",
+        event
+      );
 
       speechIndexRef.current += 1;
 
@@ -834,34 +809,170 @@ function App() {
       }, 50);
     };
 
-    window.speechSynthesis.speak(utterance);
+    window.speechSynthesis.speak(
+      utterance
+    );
+  };
+
+  // =========================================================
+  // WEATHER / MATH VOICE CLOSE COMMANDS
+  // =========================================================
+
+  const isOverlayCloseCommand = (text) => {
+    const normalized = text
+      .toLowerCase()
+      .replace(/[.,!?]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!normalized) return false;
+
+    return /^(atlas\s+)?(back|go back|close|close it|exit|return|return back|hide|dismiss|cancel|stop)$/.test(
+      normalized
+    ) || /^(atlas\s+)?(close|exit|hide|dismiss|cancel|stop)\s+(weather|climate|weather dialog|math|math dialog|calculator|calculation)$/.test(
+      normalized
+    ) || /^(weather|climate|math|calculator|calculation)\s+(close|closed|back|exit)$/.test(
+      normalized
+    );
+  };
+
+  const stopOverlayCommandListening = () => {
+    if (overlayRestartTimerRef.current) {
+      clearTimeout(overlayRestartTimerRef.current);
+      overlayRestartTimerRef.current = null;
+    }
+
+    if (overlayRecognitionRef.current) {
+      const activeRecognition = overlayRecognitionRef.current;
+      overlayRecognitionRef.current = null;
+
+      try {
+        activeRecognition.stop();
+      } catch (error) {
+        console.log("ATLAS overlay listener stop:", error);
+      }
+    }
+  };
+
+  const closeActiveOverlay = () => {
+    stopOverlayCommandListening();
+    window.speechSynthesis.cancel();
+    setSpeaking(false);
+    setListening(false);
+
+    if (showWeatherRef.current) {
+      setShowWeather(false);
+    }
+
+    if (showMathRef.current) {
+      setShowMath(false);
+      setMathResult(null);
+    }
+
+    isProcessingRef.current = false;
+    setStatus("WAITING FOR WAKE WORD");
+
+    setTimeout(() => {
+      if (
+        !showWeatherRef.current &&
+        !showMathRef.current &&
+        !showMusicRef.current
+      ) {
+        startWakeWordDetection();
+      }
+    }, 50);
+  };
+
+  const startOverlayCommandListening = () => {
+    if (!showWeatherRef.current && !showMathRef.current) return;
+    if (overlayRecognitionRef.current) return;
+
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = getSpeechLang(languageRef.current);
+    recognition.continuous = true;
+    // Use interim results so commands like "back" close the overlay
+    // as soon as Chrome recognizes the word instead of waiting for
+    // the browser to decide that the user has finished speaking.
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      if (!showWeatherRef.current && !showMathRef.current) return;
+      setListening(true);
+      setStatus("SAY BACK OR CLOSE TO EXIT");
+    };
+
+    recognition.onresult = (event) => {
+      const lastResult = event.results[event.results.length - 1];
+      const transcript = lastResult[0].transcript.trim();
+
+      console.log("ATLAS OVERLAY COMMAND HEARD:", transcript, lastResult.isFinal ? "final" : "interim");
+
+      // Close immediately on an interim match. We do not need to wait
+      // for Chrome's final speech boundary for a one/two-word command.
+      if (isOverlayCloseCommand(transcript)) {
+        closeActiveOverlay();
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.log("ATLAS overlay command error:", event.error);
+
+      if (event.error === "not-allowed") {
+        overlayRecognitionRef.current = null;
+        setListening(false);
+      }
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+
+      if (overlayRecognitionRef.current !== recognition) return;
+      overlayRecognitionRef.current = null;
+
+      if (!showWeatherRef.current && !showMathRef.current) return;
+      if (overlayRestartTimerRef.current) return;
+
+      overlayRestartTimerRef.current = setTimeout(() => {
+        overlayRestartTimerRef.current = null;
+        startOverlayCommandListening();
+      }, 100);
+    };
+
+    overlayRecognitionRef.current = recognition;
+
+    try {
+      recognition.start();
+    } catch (error) {
+      console.log("ATLAS overlay listener start error:", error);
+      overlayRecognitionRef.current = null;
+    }
   };
 
   // =========================================================
   // PROCESS QUESTION
   // =========================================================
 
-  const processQuestion = async (question) => {
+  const processQuestion = async (
+    question
+  ) => {
     if (!question.trim()) return;
 
     logInteraction(question);
 
-    const lowerQuestion = question.toLowerCase().trim();
+    const lowerQuestion =
+      question.toLowerCase().trim();
 
-    if (/^(back|go back|return|return to atlas|close|वापस|पीछे चलो|बंद करो)[.!?।]*$/.test(lowerQuestion)) {
-      if (showMusicRef.current) {
-        musicControlsRef.current?.close();
-      } else {
-        setShowResults(false);
-        setResult(null);
-        setAiText("");
-        setUserText("");
-        setShowWeather(false);
-        setShowMath(false);
-        setMathResult(null);
-        isProcessingRef.current = false;
-        setTimeout(() => startWakeWordDetection(), 300);
-      }
+    if (
+      (showWeatherRef.current || showMathRef.current) &&
+      isOverlayCloseCommand(lowerQuestion)
+    ) {
+      closeActiveOverlay();
       return;
     }
 
@@ -874,16 +985,23 @@ function App() {
       lowerQuestion.includes("climate") ||
       lowerQuestion.includes("temperature")
     ) {
-      console.log("ATLAS: WEATHER COMMAND");
-
-      const locationMatch = lowerQuestion.match(
-        /(?:weather|climate|temperature)\s+(?:in|for|at|of)\s+([a-zA-Z\s]+?)(?:\s+today|\s+tomorrow|\s+right now|\s+now)?$/i,
+      console.log(
+        "ATLAS: WEATHER COMMAND"
       );
+
+      const locationMatch =
+        lowerQuestion.match(
+          /(?:weather|climate|temperature)\s+(?:in|for|at|of)\s+([a-zA-Z\s]+?)(?:\s+today|\s+tomorrow|\s+right now|\s+now)?$/i
+        );
 
       let location = null;
 
-      if (locationMatch && locationMatch[1].trim()) {
-        location = locationMatch[1].trim();
+      if (
+        locationMatch &&
+        locationMatch[1].trim()
+      ) {
+        location =
+          locationMatch[1].trim();
       }
 
       setUserText(question);
@@ -894,14 +1012,15 @@ function App() {
 
       setShowResults(false);
 
-      setStatus(
-        getLanguagePack(languageRef.current).systemStatus.weatherSystem,
-      );
+      setStatus(getLanguagePack(languageRef.current).systemStatus.weatherSystem);
 
       isProcessingRef.current = true;
 
       if (location) {
-        console.log("ATLAS WEATHER LOCATION:", location);
+        console.log(
+          "ATLAS WEATHER LOCATION:",
+          location
+        );
 
         setWeatherCoords(null);
         setWeatherLocation(location);
@@ -910,7 +1029,9 @@ function App() {
         return;
       }
 
-      console.log("ATLAS WEATHER: NO CITY NAMED, USING CURRENT LOCATION");
+      console.log(
+        "ATLAS WEATHER: NO CITY NAMED, USING CURRENT LOCATION"
+      );
 
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -924,7 +1045,8 @@ function App() {
             setShowWeather(true);
           },
           async () => {
-            const ipLoc = await getApproxLocationByIP();
+            const ipLoc =
+              await getApproxLocationByIP();
 
             if (ipLoc) {
               setWeatherCoords(ipLoc);
@@ -932,16 +1054,17 @@ function App() {
             } else {
               setWeatherCoords(null);
               setWeatherLocation(
-                getLanguagePack(languageRef.current).weather.fallbackCity,
+                getLanguagePack(languageRef.current).weather.fallbackCity
               );
             }
 
             setShowWeather(true);
           },
-          { timeout: 6000 },
+          { timeout: 6000 }
         );
       } else {
-        const ipLoc = await getApproxLocationByIP();
+        const ipLoc =
+          await getApproxLocationByIP();
 
         if (ipLoc) {
           setWeatherCoords(ipLoc);
@@ -949,7 +1072,7 @@ function App() {
         } else {
           setWeatherCoords(null);
           setWeatherLocation(
-            getLanguagePack(languageRef.current).weather.fallbackCity,
+            getLanguagePack(languageRef.current).weather.fallbackCity
           );
         }
 
@@ -959,10 +1082,14 @@ function App() {
       return;
     }
 
-    if (handleMusicCommand(question)) {
+    if (
+      handleMusicCommand(question)
+    ) {
       setUserText(question);
 
-      setAiText("Opening local music library.");
+      setAiText(
+        "Opening local music library."
+      );
 
       return;
     }
@@ -979,9 +1106,11 @@ function App() {
 
     isProcessingRef.current = true;
 
-    const data = await askAtlas(question);
+    const data =
+      await askAtlas(question);
 
-    const answer = data.answer || "";
+    const answer =
+      data.answer || "";
 
     setAiText(answer);
 
@@ -1005,7 +1134,8 @@ function App() {
     if (isProcessingRef.current) return;
 
     const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       setStatus(getLanguagePack(languageRef.current).systemStatus.unsupported);
@@ -1052,16 +1182,10 @@ function App() {
 
       console.log("ATLAS WAKE HEARD:", transcript);
 
-      if (showResults && /\b(back|go back|return|close)\b/.test(transcript)) {
-        setShowResults(false);
-        setResult(null);
-        setAiText("");
-        setUserText("");
-        setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
-        return;
-      }
-
-      const wakeDetected = matchesWakeWord(transcript, languageRef.current);
+      const wakeDetected = matchesWakeWord(
+        transcript,
+        languageRef.current
+      );
 
       if (!wakeDetected) return;
 
@@ -1118,11 +1242,7 @@ function App() {
 
       if (intentionallyStopped) return;
       if (isProcessingRef.current) return;
-      if (
-        showMusicRef.current ||
-        showWeatherRef.current ||
-        showMathRef.current
-      ) {
+      if (showMusicRef.current || showWeatherRef.current || showMathRef.current) {
         return;
       }
 
@@ -1169,101 +1289,152 @@ function App() {
   // QUESTION LISTENING
   // =========================================================
 
-  const startQuestionListening = () => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+  const startQuestionListening =
+    () => {
+      const SpeechRecognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
 
-    if (!SpeechRecognition) return;
+      if (!SpeechRecognition)
+        return;
 
-    if (recognitionRef.current) return;
+      if (recognitionRef.current)
+        return;
 
-    const recognition = new SpeechRecognition();
+      const recognition =
+        new SpeechRecognition();
 
-    recognition.lang = getSpeechLang(languageRef.current);
+      recognition.lang = getSpeechLang(languageRef.current);
 
-    recognition.continuous = false;
+      recognition.continuous = false;
 
-    recognition.interimResults = false;
+      recognition.interimResults = false;
 
-    recognition.onstart = () => {
-      setListening(true);
+      recognition.onstart = () => {
+        setListening(true);
 
-      setStatus(getLanguagePack(languageRef.current).systemStatus.listening);
+        setStatus(getLanguagePack(languageRef.current).systemStatus.listening);
 
-      setUserText("");
+        setUserText("");
 
-      setAiText("");
+        setAiText("");
 
-      setResult(null);
+        setResult(null);
 
-      setShowResults(false);
-    };
+        setShowResults(false);
+      };
 
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
+      recognition.onresult = (
+        event
+      ) => {
+        const transcript =
+          event.results[0][0]
+            .transcript;
 
-      console.log("Question:", transcript);
+        console.log(
+          "Question:",
+          transcript
+        );
 
-      setListening(false);
+        setListening(false);
 
-      isProcessingRef.current = true;
+        isProcessingRef.current =
+          true;
 
-      processQuestion(transcript);
-    };
+        processQuestion(
+          transcript
+        );
+      };
 
-    recognition.onerror = (event) => {
-      console.log("Question recognition error:", event.error);
+      recognition.onerror = (
+        event
+      ) => {
+        console.log(
+          "Question recognition error:",
+          event.error
+        );
 
-      setListening(false);
+        setListening(false);
 
-      recognitionRef.current = null;
+        recognitionRef.current =
+          null;
 
-      const pack = getLanguagePack(languageRef.current);
+        const pack = getLanguagePack(languageRef.current);
 
-      if (event.error === "no-speech") {
-        setStatus(pack.systemStatus.noQuestion);
-      } else {
-        setStatus(pack.systemStatus.voiceError);
+        if (
+          event.error ===
+          "no-speech"
+        ) {
+          setStatus(
+            pack.systemStatus.noQuestion
+          );
+        } else {
+          setStatus(
+            pack.systemStatus.voiceError
+          );
+        }
+
+        isProcessingRef.current =
+          false;
+
+        setTimeout(() => {
+          startWakeWordDetection();
+        }, 1000);
+      };
+
+      recognition.onend = () => {
+        setListening(false);
+
+        recognitionRef.current =
+          null;
+      };
+
+      recognitionRef.current =
+        recognition;
+
+      try {
+        recognition.start();
+      } catch (error) {
+        console.log(
+          "Question recognition start error:",
+          error
+        );
       }
-
-      isProcessingRef.current = false;
-
-      setTimeout(() => {
-        startWakeWordDetection();
-      }, 1000);
     };
 
-    recognition.onend = () => {
-      setListening(false);
+  // Keep a dedicated voice listener active while Weather/Math is open.
+  // This lets the user say "back" or "close" without saying the wake word again.
+  useEffect(() => {
+    if (showWeather || showMath) {
+      const timer = setTimeout(() => {
+        startOverlayCommandListening();
+      }, 50);
 
-      recognitionRef.current = null;
-    };
-
-    recognitionRef.current = recognition;
-
-    try {
-      recognition.start();
-    } catch (error) {
-      console.log("Question recognition start error:", error);
+      return () => clearTimeout(timer);
     }
-  };
+
+    stopOverlayCommandListening();
+    setListening(false);
+  }, [showWeather, showMath]);
 
   // =========================================================
   // AUTOMATIC BOOT
   // =========================================================
 
   useEffect(() => {
-    const bootTimer = setTimeout(() => {
-      setBooted(true);
-
-      const greeting = getLanguagePack(languageRef.current).greeting;
-
-      setAiText(greeting);
-
+    const bootTimer =
       setTimeout(() => {
-        speak(greeting);
-      }, 500);
-    }, 3000);
+        setBooted(true);
+
+        const greeting =
+          getLanguagePack(languageRef.current).greeting;
+
+        setAiText(greeting);
+
+        setTimeout(() => {
+          speak(greeting);
+        }, 500);
+      }, 3000);
 
     return () => {
       clearTimeout(bootTimer);
@@ -1275,11 +1446,17 @@ function App() {
 
       window.speechSynthesis.cancel();
 
-      if (recognitionRef.current) {
+      stopOverlayCommandListening();
+
+      if (
+        recognitionRef.current
+      ) {
         recognitionRef.current.stop();
       }
 
-      if (wakeWordRecognitionRef.current) {
+      if (
+        wakeWordRecognitionRef.current
+      ) {
         wakeWordRecognitionRef.current.stop();
       }
     };
@@ -1301,14 +1478,20 @@ function App() {
 
           <div className="boot-ring ring-3"></div>
 
-          <div className="boot-center">A</div>
+          <div className="boot-center">
+            A
+          </div>
         </div>
 
         <h1>
-          A.T.L.A.S <span>3K</span>
+          A.T.L.A.S{" "}
+          <span>3K</span>
         </h1>
 
-        <p>ADVANCED TECHNOLOGY & LEARNING ASSISTANT SYSTEM</p>
+        <p>
+          ADVANCED TECHNOLOGY &
+          LEARNING ASSISTANT SYSTEM
+        </p>
 
         <p
           style={{
@@ -1337,15 +1520,17 @@ function App() {
       {showMusic && (
         <MusicPlayer
           songToPlay={songToPlay}
-          controlsRef={musicControlsRef}
           onClose={() => {
             setShowMusic(false);
 
             setSongToPlay(null);
 
-            isProcessingRef.current = false;
+            isProcessingRef.current =
+              false;
 
-            setStatus("WAITING FOR WAKE WORD");
+            setStatus(
+              "WAITING FOR WAKE WORD"
+            );
 
             setTimeout(() => {
               startWakeWordDetection();
@@ -1358,17 +1543,7 @@ function App() {
         <WeatherDialog
           location={weatherLocation}
           coords={weatherCoords}
-          onClose={() => {
-            setShowWeather(false);
-
-            isProcessingRef.current = false;
-
-            setStatus("WAITING FOR WAKE WORD");
-
-            setTimeout(() => {
-              startWakeWordDetection();
-            }, 300);
-          }}
+          onClose={closeActiveOverlay}
         />
       )}
 
@@ -1376,15 +1551,7 @@ function App() {
         <MathDialog
           result={mathResult}
           question={userText}
-          onClose={() => {
-            setShowMath(false);
-            setMathResult(null);
-            isProcessingRef.current = false;
-            setStatus("WAITING FOR WAKE WORD");
-            setTimeout(() => {
-              startWakeWordDetection();
-            }, 300);
-          }}
+          onClose={closeActiveOverlay}
         />
       )}
 
@@ -1397,16 +1564,19 @@ function App() {
             </div>
 
             <div className="logo">
-              A.T.L.A.S <span>3K</span>
+              A.T.L.A.S{" "}
+              <span>3K</span>
             </div>
 
-            {/* LANGUAGE TOGGLE */}
             <LanguageToggle language={language} onChange={setLanguage} />
 
             <div className="version">
               {result.modelUsed
                 ? `CORE // ${
-                    result.modelUsed.split("/")[1] || result.modelUsed
+                    result.modelUsed.split(
+                      "/"
+                    )[1] ||
+                    result.modelUsed
                   }`
                 : "V1.0 // KNOWLEDGE CORE"}
             </div>
@@ -1414,9 +1584,14 @@ function App() {
 
           <main className="results-page">
             <div className="results-header">
-              <div className="results-label">INTELLIGENCE REPORT</div>
+              <div className="results-label">
+                INTELLIGENCE REPORT
+              </div>
 
-              <h1>{result.title || "ATLAS Intelligence Report"}</h1>
+              <h1>
+                {result.title ||
+                  "ATLAS Intelligence Report"}
+              </h1>
 
               <div className="question-display">
                 <span>QUERY</span>
@@ -1430,9 +1605,15 @@ function App() {
                 {result.imageUrl && (
                   <div className="results-image-card">
                     <img
-                      src={result.imageUrl}
-                      alt={result.title}
-                      onError={(event) => {
+                      src={
+                        result.imageUrl
+                      }
+                      alt={
+                        result.title
+                      }
+                      onError={(
+                        event
+                      ) => {
                         event.currentTarget.parentElement.style.display =
                           "none";
                       }}
@@ -1441,59 +1622,137 @@ function App() {
                 )}
 
                 <div className="results-content">
-                  {(result.paragraphs || []).map((paragraph, index) => (
-                    <p key={index}>{paragraph}</p>
-                  ))}
+                  {(
+                    result.paragraphs ||
+                    []
+                  ).map(
+                    (
+                      paragraph,
+                      index
+                    ) => (
+                      <p
+                        key={
+                          index
+                        }
+                      >
+                        {
+                          paragraph
+                        }
+                      </p>
+                    )
+                  )}
 
                   {result.answer &&
-                    (!result.paragraphs || result.paragraphs.length === 0) && (
-                      <p>{result.answer}</p>
+                    (!result.paragraphs ||
+                      result.paragraphs
+                        .length ===
+                        0) && (
+                      <p>
+                        {
+                          result.answer
+                        }
+                      </p>
                     )}
                 </div>
 
-                {result.keyFacts && result.keyFacts.length > 0 && (
-                  <div className="facts-section">
-                    <div className="section-heading">KEY FACTS</div>
+                {result.keyFacts &&
+                  result.keyFacts
+                    .length >
+                    0 && (
+                    <div className="facts-section">
+                      <div className="section-heading">
+                        KEY FACTS
+                      </div>
 
-                    <div className="facts-grid">
-                      {result.keyFacts.map((fact, index) => (
-                        <div className="fact-card" key={index}>
-                          <span>{String(index + 1).padStart(2, "0")}</span>
+                      <div className="facts-grid">
+                        {result.keyFacts.map(
+                          (
+                            fact,
+                            index
+                          ) => (
+                            <div
+                              className="fact-card"
+                              key={
+                                index
+                              }
+                            >
+                              <span>
+                                {String(
+                                  index +
+                                    1
+                                ).padStart(
+                                  2,
+                                  "0"
+                                )}
+                              </span>
 
-                          <p>{fact}</p>
-                        </div>
-                      ))}
+                              <p>
+                                {
+                                  fact
+                                }
+                              </p>
+                            </div>
+                          )
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {result.relatedLinks && result.relatedLinks.length > 0 && (
-                  <div className="links-section">
-                    <div className="section-heading">EXPLORE FURTHER</div>
+                {result.relatedLinks &&
+                  result.relatedLinks
+                    .length >
+                    0 && (
+                    <div className="links-section">
+                      <div className="section-heading">
+                        EXPLORE FURTHER
+                      </div>
 
-                    <div className="links-grid">
-                      {result.relatedLinks.map((link, index) => (
-                        <a
-                          key={index}
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="knowledge-link"
-                        >
-                          <span className="link-number">0{index + 1}</span>
+                      <div className="links-grid">
+                        {result.relatedLinks.map(
+                          (
+                            link,
+                            index
+                          ) => (
+                            <a
+                              key={
+                                index
+                              }
+                              href={
+                                link.url
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="knowledge-link"
+                            >
+                              <span className="link-number">
+                                0
+                                {index +
+                                  1}
+                              </span>
 
-                          <div>
-                            <strong>{link.title}</strong>
+                              <div>
+                                <strong>
+                                  {
+                                    link.title
+                                  }
+                                </strong>
 
-                            <small>{link.description}</small>
-                          </div>
+                                <small>
+                                  {
+                                    link.description
+                                  }
+                                </small>
+                              </div>
 
-                          <span className="link-arrow">↗</span>
-                        </a>
-                      ))}
+                              <span className="link-arrow">
+                                ↗
+                              </span>
+                            </a>
+                          )
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </section>
 
               <aside className="results-side">
@@ -1505,21 +1764,29 @@ function App() {
                   <div className="side-status">
                     <span className="status-dot"></span>
 
-                    {speaking ? "ATLAS SPEAKING" : "REPORT READY"}
+                    {speaking
+                      ? "ATLAS SPEAKING"
+                      : "REPORT READY"}
                   </div>
 
                   <div className="side-line"></div>
 
                   <p>
-                    A.T.L.A.S has generated an expanded knowledge report based
-                    on your query.
+                    A.T.L.A.S has
+                    generated an
+                    expanded
+                    knowledge report
+                    based on your
+                    query.
                   </p>
                 </div>
 
                 <button
                   className="back-command"
                   onClick={() => {
-                    setShowResults(false);
+                    setShowResults(
+                      false
+                    );
 
                     setResult(null);
 
@@ -1532,17 +1799,23 @@ function App() {
                     }, 300);
                   }}
                 >
-                  ← RETURN TO ATLAS
+                  ← RETURN TO
+                  ATLAS
                 </button>
               </aside>
             </div>
           </main>
 
           <footer>
-            <span>A.T.L.A.S 3K // AI EXHIBITION PROTOTYPE</span>
+            <span>
+              A.T.L.A.S 3K // AI
+              EXHIBITION PROTOTYPE
+            </span>
 
             <span>
-              {speaking ? "VOICE OUTPUT ACTIVE" : "ALL SYSTEMS NOMINAL"}
+              {speaking
+                ? "VOICE OUTPUT ACTIVE"
+                : "ALL SYSTEMS NOMINAL"}
             </span>
           </footer>
         </>
@@ -1555,30 +1828,40 @@ function App() {
             </div>
 
             <div className="logo">
-              A.T.L.A.S <span>3K</span>
+              A.T.L.A.S{" "}
+              <span>3K</span>
             </div>
 
             <LiveClock />
 
             <LanguageToggle language={language} onChange={setLanguage} />
 
-            <div className="version">V1.0 // VOICE CORE</div>
+            <div className="version">
+              V1.0 // VOICE CORE
+            </div>
           </header>
 
           <main className="dashboard">
             <aside className="left-panel">
               <div className="panel brand-panel">
-                <small>ADVANCED TECHNOLOGY</small>
+                <small>
+                  ADVANCED TECHNOLOGY
+                </small>
 
                 <h2>
-                  A.T.L.A.S <span>3K</span>
+                  A.T.L.A.S{" "}
+                  <span>3K</span>
                 </h2>
 
-                <small>INTELLIGENCE SYSTEM</small>
+                <small>
+                  INTELLIGENCE SYSTEM
+                </small>
               </div>
 
               <div className="panel">
-                <div className="panel-title">SYSTEM STATUS</div>
+                <div className="panel-title">
+                  SYSTEM STATUS
+                </div>
 
                 <div className="status-row">
                   <span>CORE</span>
@@ -1605,20 +1888,26 @@ function App() {
                 </div>
 
                 <div className="status-row">
-                  <span>NEURAL LINK</span>
+                  <span>
+                    NEURAL LINK
+                  </span>
 
                   <b>STANDBY</b>
                 </div>
 
                 <div className="status-row">
-                  <span>VISUAL SYSTEM</span>
+                  <span>
+                    VISUAL SYSTEM
+                  </span>
 
                   <b>ACTIVE</b>
                 </div>
               </div>
 
               <div className="panel quick-panel">
-                <div className="panel-title">QUICK COMMANDS</div>
+                <div className="panel-title">
+                  QUICK COMMANDS
+                </div>
 
                 <div className="quick-grid">
                   <button
@@ -1683,13 +1972,20 @@ function App() {
             </aside>
 
             <section className="dashboard-center">
-              <AtlasGlobe listening={listening} speaking={speaking} />
+              <AtlasGlobe
+                listening={listening}
+                speaking={speaking}
+              />
 
-              <div className="voice-status">{status}</div>
+              <div className="voice-status">
+                {status}
+              </div>
 
               {userText && (
                 <div className="user-subtitle">
-                  <span className="subtitle-label">YOU</span>
+                  <span className="subtitle-label">
+                    YOU
+                  </span>
                   {userText}
                 </div>
               )}
@@ -1707,7 +2003,9 @@ function App() {
 
                 <button
                   type="button"
-                  className={`talk-bar-btn ${listening ? "listening" : ""}`}
+                  className={`talk-bar-btn ${
+                    listening ? "listening" : ""
+                  }`}
                   onClick={() => {
                     if (listening) {
                       try {
@@ -1729,9 +2027,13 @@ function App() {
                   }}
                   aria-label="Voice microphone"
                 >
-                  <span className="talk-bar-icon">{listening ? "■" : "●"}</span>
+                  <span className="talk-bar-icon">
+                    {listening ? "■" : "●"}
+                  </span>
                   <span className="talk-bar-text">
-                    {listening ? lang.voiceHintListening : lang.voiceHintIdle}
+                    {listening
+                      ? lang.voiceHintListening
+                      : lang.voiceHintIdle}
                   </span>
                 </button>
 
@@ -1749,15 +2051,26 @@ function App() {
 
             <aside className="right-panel">
               <div className="panel response-panel">
-                <div className="panel-title">LIVE FEED</div>
+                <div className="panel-title">
+                  LIVE FEED
+                </div>
 
                 {interactionLog.length === 0 ? (
                   <div className="waiting">
-                    <div className="waiting-symbol">◈</div>
+                    <div className="waiting-symbol">
+                      ◈
+                    </div>
 
-                    <p>A.T.L.A.S is waiting for your command.</p>
+                    <p>
+                      A.T.L.A.S is
+                      waiting for your
+                      command.
+                    </p>
 
-                    <small>Say "Hey Atlas" to begin.</small>
+                    <small>
+                      Say "Hey Atlas" to
+                      begin.
+                    </small>
                   </div>
                 ) : (
                   <div className="feed-list">
@@ -1765,8 +2078,12 @@ function App() {
                       <div className="feed-item" key={entry.id}>
                         <span className="feed-dot" />
                         <div className="feed-body">
-                          <span className="feed-label">{entry.label}</span>
-                          <span className="feed-time">{entry.time}</span>
+                          <span className="feed-label">
+                            {entry.label}
+                          </span>
+                          <span className="feed-time">
+                            {entry.time}
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -1777,7 +2094,10 @@ function App() {
           </main>
 
           <footer>
-            <span>A.T.L.A.S 3K // AI EXHIBITION PROTOTYPE</span>
+            <span>
+              A.T.L.A.S 3K // AI
+              EXHIBITION PROTOTYPE
+            </span>
 
             <span>
               {speaking

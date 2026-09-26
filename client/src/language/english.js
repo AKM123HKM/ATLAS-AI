@@ -35,6 +35,8 @@ const english = {
 
   greeting: "Hello.",
 
+  readMoreOnScreen: "The full details are on your screen.",
+
   voiceHintIdle: 'Tap to speak · say "Hello"',
   voiceHintListening: "Listening...",
 
@@ -126,7 +128,7 @@ const english = {
 
     thankYou: {
       title: "ATLAS",
-      answer: "You're welcome. I am always ready for your next question.", 
+      answer: "You're welcome. I am always ready for your next question.",
       paragraphs: [
         "You're welcome.",
         "I am always ready for your next question.",

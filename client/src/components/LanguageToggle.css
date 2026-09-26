@@ -1,203 +1,77 @@
-/* =========================================
-   ATLAS AI - LANGUAGE TOGGLE
-   ========================================= */
+/* =========================================================
+   LANGUAGE TOGGLE — matches the ATLAS HUD glass theme
+   (uses the same CSS variables defined in FuturisticHud.css)
+   ========================================================= */
 
-.language-toggle-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Main glass container */
-.language-toggle {
+.lang-toggle {
   position: relative;
 
   display: flex;
-  align-items: center;
 
-  padding: 4px;
+  padding: 3px;
 
-  min-width: 150px;
-  height: 42px;
+  border: 1px solid rgba(77, 232, 255, 0.22);
+  border-radius: 999px;
 
-  background: rgba(4, 18, 27, 0.72);
-
-  border: 1px solid rgba(0, 229, 255, 0.28);
-
-  border-radius: 14px;
-
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-
-  box-shadow:
-    0 0 18px rgba(0, 229, 255, 0.08),
-    inset 0 0 18px rgba(0, 229, 255, 0.025);
+  background: rgba(77, 232, 255, 0.03);
 
   overflow: hidden;
 }
 
-/* =========================================
-   LANGUAGE BUTTON
-   ========================================= */
+.lang-toggle-thumb {
+  position: absolute;
 
-.language-option {
+  top: 3px;
+  left: 3px;
+  bottom: 3px;
+
+  width: calc(50% - 3px);
+
+  border-radius: 999px;
+
+  background: rgba(77, 232, 255, 0.16);
+
+  box-shadow:
+    0 0 14px rgba(77, 232, 255, 0.25),
+    inset 0 0 10px rgba(77, 232, 255, 0.1);
+
+  transition: transform 0.25s ease;
+
+  z-index: 0;
+}
+
+.lang-toggle-btn {
   position: relative;
 
-  flex: 1;
+  z-index: 1;
 
-  height: 34px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-
-  padding: 0 10px;
+  padding: 7px 16px;
 
   border: none;
-  border-radius: 10px;
 
   background: transparent;
 
-  color: rgba(190, 220, 228, 0.55);
+  color: var(--hud-text-dim, #7fa3a9);
 
-  font-family:
-    "Inter",
-    "Segoe UI",
-    Arial,
-    sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
 
   cursor: pointer;
 
-  transition:
-    color 0.25s ease,
-    background 0.25s ease,
-    box-shadow 0.25s ease,
-    transform 0.2s ease;
-}
-
-/* Hover */
-
-.language-option:hover {
-  color: rgba(220, 250, 255, 0.9);
-
-  background: rgba(0, 229, 255, 0.06);
-}
-
-/* Active language */
-
-.language-option.active {
-  color: #00e5ff;
-
-  background: rgba(0, 229, 255, 0.11);
-
-  box-shadow:
-    inset 0 0 12px rgba(0, 229, 255, 0.08),
-    0 0 12px rgba(0, 229, 255, 0.06);
-}
-
-/* Small press animation */
-
-.language-option:active {
-  transform: scale(0.96);
-}
-
-/* =========================================
-   LANGUAGE CODE
-   ========================================= */
-
-.language-code {
-  font-size: 12px;
-
-  font-weight: 800;
-
-  letter-spacing: 0.8px;
-
-  line-height: 1;
-}
-
-/* =========================================
-   LANGUAGE NAME
-   ========================================= */
-
-.language-name {
-  font-size: 10px;
-
-  font-weight: 600;
-
-  letter-spacing: 0.2px;
-
   white-space: nowrap;
+
+  transition: color 0.2s ease;
 }
 
-/* =========================================
-   DIVIDER
-   ========================================= */
-
-.language-divider {
-  width: 1px;
-  height: 20px;
-
-  background: rgba(0, 229, 255, 0.15);
-
-  flex-shrink: 0;
+.lang-toggle-btn.lang-active {
+  color: var(--atlas-cyan, #4de8ff);
+  text-shadow: 0 0 10px rgba(77, 232, 255, 0.4);
 }
 
-/* =========================================
-   ACTIVE GLOW
-   ========================================= */
-
-.language-option.active::after {
-  content: "";
-
-  position: absolute;
-
-  left: 18%;
-  right: 18%;
-  bottom: 2px;
-
-  height: 1px;
-
-  background: #00e5ff;
-
-  box-shadow:
-    0 0 6px #00e5ff,
-    0 0 12px rgba(0, 229, 255, 0.7);
-
-  opacity: 0.9;
-}
-
-/* =========================================
-   MOBILE
-   ========================================= */
-
-@media (max-width: 600px) {
-  .language-toggle {
-    min-width: 132px;
-    height: 38px;
-  }
-
-  .language-option {
-    height: 30px;
-    padding: 0 7px;
-    gap: 4px;
-  }
-
-  .language-code {
-    font-size: 11px;
-  }
-
-  .language-name {
-    font-size: 9px;
-  }
-}
-
-/* =========================================
-   REDUCED MOTION
-   ========================================= */
-
-@media (prefers-reduced-motion: reduce) {
-  .language-option {
-    transition: none;
+@media (max-width: 850px) {
+  .lang-toggle-btn {
+    padding: 6px 12px;
+    font-size: 8px;
   }
 }
