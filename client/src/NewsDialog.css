@@ -1,0 +1,314 @@
+.atlas-news-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(2, 7, 13, 0.82);
+  backdrop-filter: blur(12px);
+}
+
+.atlas-news-panel {
+  position: relative;
+  width: min(1420px, 96vw);
+  height: min(850px, 92vh);
+  min-height: 560px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(145deg, rgba(10, 22, 32, 0.98), rgba(3, 10, 17, 0.99)),
+    #061019;
+  border: 1px solid rgba(67, 234, 255, 0.38);
+  box-shadow: 0 0 0 1px rgba(67, 234, 255, 0.05), 0 0 70px rgba(0, 212, 255, 0.13), inset 0 0 70px rgba(0, 190, 255, 0.035);
+  clip-path: polygon(0 18px, 18px 0, calc(100% - 18px) 0, 100% 18px, 100% calc(100% - 18px), calc(100% - 18px) 100%, 18px 100%, 0 calc(100% - 18px));
+}
+
+.atlas-news-topline {
+  position: absolute;
+  top: 0;
+  left: 7%;
+  right: 7%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #43eaff, transparent);
+  box-shadow: 0 0 18px rgba(67, 234, 255, 0.7);
+}
+
+.atlas-news-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 34px 20px;
+  border-bottom: 1px solid rgba(67, 234, 255, 0.12);
+}
+
+.atlas-news-eyebrow,
+.atlas-news-subline,
+.atlas-news-toolbar span,
+.atlas-news-card-meta,
+.atlas-news-card-footer,
+.atlas-news-footer {
+  font-family: "Courier New", monospace;
+  letter-spacing: 0.13em;
+}
+
+.atlas-news-eyebrow {
+  color: #43eaff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.atlas-news-header h2 {
+  margin: 6px 0 7px;
+  color: #e9fbff;
+  font-size: clamp(28px, 3vw, 48px);
+  line-height: 1;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+}
+
+.atlas-news-subline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(181, 225, 235, 0.65);
+  font-size: 9px;
+}
+
+.atlas-news-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #43eaff;
+  box-shadow: 0 0 12px #43eaff;
+  animation: atlas-news-pulse 1.3s ease-in-out infinite;
+}
+
+.atlas-news-close {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(67, 234, 255, 0.3);
+  background: rgba(67, 234, 255, 0.04);
+  color: #8fefff;
+  font-size: 27px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.atlas-news-close:hover {
+  background: rgba(67, 234, 255, 0.12);
+  box-shadow: 0 0 20px rgba(67, 234, 255, 0.16);
+}
+
+.atlas-news-toolbar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 14px 34px;
+  background: rgba(67, 234, 255, 0.025);
+  border-bottom: 1px solid rgba(67, 234, 255, 0.1);
+}
+
+.atlas-news-scope,
+.atlas-news-query {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(67, 234, 255, 0.12);
+  background: rgba(0, 0, 0, 0.17);
+}
+
+.atlas-news-toolbar span {
+  color: rgba(160, 215, 226, 0.5);
+  font-size: 8px;
+}
+
+.atlas-news-toolbar strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #bceef7;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.atlas-news-refresh {
+  padding: 0 18px;
+  border: 1px solid rgba(67, 234, 255, 0.32);
+  background: rgba(67, 234, 255, 0.07);
+  color: #67eaff;
+  font: 700 10px "Courier New", monospace;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.atlas-news-refresh:hover:not(:disabled) {
+  background: rgba(67, 234, 255, 0.14);
+}
+
+.atlas-news-refresh:disabled { opacity: 0.55; cursor: default; }
+.atlas-news-refresh.is-refreshing { animation: atlas-news-spin 0.8s linear infinite; }
+
+.atlas-news-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 34px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(67, 234, 255, 0.35) transparent;
+}
+
+.atlas-news-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.atlas-news-card {
+  position: relative;
+  min-height: 180px;
+  padding: 20px 22px 17px 58px;
+  border: 1px solid rgba(67, 234, 255, 0.11);
+  background: linear-gradient(135deg, rgba(16, 36, 49, 0.64), rgba(5, 15, 23, 0.7));
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.atlas-news-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(67, 234, 255, 0.34);
+  background: linear-gradient(135deg, rgba(16, 43, 58, 0.75), rgba(5, 16, 25, 0.78));
+}
+
+.atlas-news-card-featured {
+  grid-column: 1 / -1;
+  min-height: 210px;
+  border-color: rgba(67, 234, 255, 0.24);
+  background: linear-gradient(120deg, rgba(13, 48, 63, 0.68), rgba(4, 15, 24, 0.82));
+}
+
+.atlas-news-card-index {
+  position: absolute;
+  left: 18px;
+  top: 20px;
+  color: rgba(67, 234, 255, 0.45);
+  font: 700 11px "Courier New", monospace;
+}
+
+.atlas-news-card-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 11px;
+  color: rgba(112, 226, 243, 0.55);
+  font-size: 8px;
+}
+
+.atlas-news-card-meta span:last-child { color: rgba(205, 239, 244, 0.42); }
+
+.atlas-news-card h3 {
+  margin: 0;
+  color: #e8fbff;
+  font-size: 18px;
+  line-height: 1.28;
+  letter-spacing: 0.01em;
+  font-weight: 700;
+}
+
+.atlas-news-card-featured h3 { font-size: clamp(21px, 2vw, 30px); max-width: 1000px; }
+
+.atlas-news-card p {
+  margin: 11px 0 0;
+  color: rgba(204, 232, 238, 0.67);
+  font-size: 12px;
+  line-height: 1.55;
+  max-width: 1000px;
+}
+
+.atlas-news-card-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  margin-top: 17px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(67, 234, 255, 0.09);
+  color: rgba(130, 211, 224, 0.45);
+  font-size: 8px;
+}
+
+.atlas-news-card-footer a {
+  color: #54e8ff;
+  text-decoration: none;
+}
+
+.atlas-news-card-footer a:hover { text-decoration: underline; }
+
+.atlas-news-state {
+  height: 100%;
+  min-height: 360px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+  color: #bdeef5;
+}
+
+.atlas-news-state strong {
+  font: 800 15px "Courier New", monospace;
+  letter-spacing: 0.13em;
+}
+
+.atlas-news-state small {
+  max-width: 540px;
+  color: rgba(190, 227, 234, 0.55);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.atlas-news-loader { display: flex; gap: 8px; margin-bottom: 7px; }
+.atlas-news-loader span { width: 7px; height: 32px; background: #43eaff; box-shadow: 0 0 14px rgba(67, 234, 255, 0.65); animation: atlas-news-bars 0.9s ease-in-out infinite; }
+.atlas-news-loader span:nth-child(2) { animation-delay: 0.15s; }
+.atlas-news-loader span:nth-child(3) { animation-delay: 0.3s; }
+
+.atlas-news-error .atlas-news-error-code { color: #ff9a9a; font: 700 11px "Courier New", monospace; letter-spacing: 0.15em; }
+.atlas-news-error button { margin-top: 7px; padding: 10px 15px; border: 1px solid rgba(67,234,255,.35); background: rgba(67,234,255,.06); color: #67eaff; cursor: pointer; font: 700 9px "Courier New", monospace; letter-spacing: .12em; }
+
+.atlas-news-footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 34px;
+  color: rgba(126, 207, 220, 0.42);
+  font-size: 8px;
+  border-top: 1px solid rgba(67, 234, 255, 0.1);
+}
+
+@keyframes atlas-news-pulse { 0%, 100% { opacity: .45; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.1); } }
+@keyframes atlas-news-bars { 0%, 100% { transform: scaleY(.35); opacity: .35; } 50% { transform: scaleY(1); opacity: 1; } }
+@keyframes atlas-news-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 900px) {
+  .atlas-news-overlay { padding: 12px; }
+  .atlas-news-panel { width: 100%; height: 96vh; min-height: 0; }
+  .atlas-news-header, .atlas-news-body { padding-left: 18px; padding-right: 18px; }
+  .atlas-news-toolbar { grid-template-columns: 1fr auto; padding: 12px 18px; }
+  .atlas-news-query { grid-column: 1 / -1; order: 3; }
+  .atlas-news-grid { grid-template-columns: 1fr; }
+  .atlas-news-card-featured { grid-column: auto; }
+  .atlas-news-footer { padding-left: 18px; padding-right: 18px; }
+}
+
+@media (max-width: 560px) {
+  .atlas-news-header h2 { font-size: 25px; }
+  .atlas-news-subline { font-size: 7px; }
+  .atlas-news-card h3, .atlas-news-card-featured h3 { font-size: 16px; }
+  .atlas-news-card p { font-size: 11px; }
+  .atlas-news-footer { font-size: 7px; }
+}

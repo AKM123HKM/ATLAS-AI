@@ -5,6 +5,8 @@ import "./FuturisticHud.css";
 import MusicPlayer from "./MusicPlayer";
 import WeatherDialog from "./WeatherDialog";
 import MathDialog from "./MathDialog";
+import NewsDialog from "./NewsDialog";
+import { isNewsQuestion } from "./newsEngine";
 import { solveMath, isMathQuestion } from "./mathEngine";
 import AtlasGlobe from "./AtlasGlobe";
 import LanguageToggle from "./components/LanguageToggle";
@@ -205,7 +207,8 @@ function App() {
       !isProcessingRef.current &&
       !showMusicRef.current &&
       !showWeatherRef.current &&
-      !showMathRef.current
+      !showMathRef.current &&
+      !showNewsRef.current
     ) {
       try {
         wakeWordRecognitionRef.current.stop();
@@ -224,6 +227,8 @@ function App() {
 
   const [showWeather, setShowWeather] = useState(false);
   const [showMath, setShowMath] = useState(false);
+  const [showNews, setShowNews] = useState(false);
+  const [newsQuery, setNewsQuery] = useState("latest news");
   const [mathResult, setMathResult] = useState(null);
   const [weatherLocation, setWeatherLocation] =
     useState("Greater Noida");
@@ -242,8 +247,6 @@ function App() {
   const [listening, setListening] = useState(false);
 
   const recognitionRef = useRef(null);
-  const overlayRecognitionRef = useRef(null);
-  const overlayRestartTimerRef = useRef(null);
   const wakeWordRecognitionRef = useRef(null);
   const wakeRestartTimerRef = useRef(null);
   const wakeSessionIdRef = useRef(0);
@@ -254,6 +257,7 @@ function App() {
   const showMusicRef = useRef(false);
   const showWeatherRef = useRef(false);
   const showMathRef = useRef(false);
+  const showNewsRef = useRef(false);
 
   useEffect(() => {
     showMusicRef.current = showMusic;
@@ -266,6 +270,10 @@ function App() {
   useEffect(() => {
     showMathRef.current = showMath;
   }, [showMath]);
+
+  useEffect(() => {
+    showNewsRef.current = showNews;
+  }, [showNews]);
 
   const isProcessingRef = useRef(false);
 
@@ -483,6 +491,27 @@ function App() {
         ? pack.systemStatus.searchingMusic + ": " + cleanedCommand.toUpperCase()
         : pack.systemStatus.musicSystem
     );
+
+    return true;
+  };
+
+  // =========================================================
+  // LOCAL NEWS CORE — ZERO LLM REQUESTS
+  // =========================================================
+
+  const handleNewsCommand = (question) => {
+    if (!isNewsQuestion(question)) return false;
+
+    console.log("ATLAS: LIVE NEWS CORE → DIRECT NEWS RELAY");
+
+    setNewsQuery(question);
+    setUserText(question);
+    setAiText("");
+    setResult(null);
+    setShowResults(false);
+    setShowNews(true);
+    setStatus("LIVE NEWS FEED // DIRECT SOURCE // NO LLM REQUEST");
+    isProcessingRef.current = true;
 
     return true;
   };
@@ -815,146 +844,6 @@ function App() {
   };
 
   // =========================================================
-  // WEATHER / MATH VOICE CLOSE COMMANDS
-  // =========================================================
-
-  const isOverlayCloseCommand = (text) => {
-    const normalized = text
-      .toLowerCase()
-      .replace(/[.,!?]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!normalized) return false;
-
-    return /^(atlas\s+)?(back|go back|close|close it|exit|return|return back|hide|dismiss|cancel|stop)$/.test(
-      normalized
-    ) || /^(atlas\s+)?(close|exit|hide|dismiss|cancel|stop)\s+(weather|climate|weather dialog|math|math dialog|calculator|calculation)$/.test(
-      normalized
-    ) || /^(weather|climate|math|calculator|calculation)\s+(close|closed|back|exit)$/.test(
-      normalized
-    );
-  };
-
-  const stopOverlayCommandListening = () => {
-    if (overlayRestartTimerRef.current) {
-      clearTimeout(overlayRestartTimerRef.current);
-      overlayRestartTimerRef.current = null;
-    }
-
-    if (overlayRecognitionRef.current) {
-      const activeRecognition = overlayRecognitionRef.current;
-      overlayRecognitionRef.current = null;
-
-      try {
-        activeRecognition.stop();
-      } catch (error) {
-        console.log("ATLAS overlay listener stop:", error);
-      }
-    }
-  };
-
-  const closeActiveOverlay = () => {
-    stopOverlayCommandListening();
-    window.speechSynthesis.cancel();
-    setSpeaking(false);
-    setListening(false);
-
-    if (showWeatherRef.current) {
-      setShowWeather(false);
-    }
-
-    if (showMathRef.current) {
-      setShowMath(false);
-      setMathResult(null);
-    }
-
-    isProcessingRef.current = false;
-    setStatus("WAITING FOR WAKE WORD");
-
-    setTimeout(() => {
-      if (
-        !showWeatherRef.current &&
-        !showMathRef.current &&
-        !showMusicRef.current
-      ) {
-        startWakeWordDetection();
-      }
-    }, 50);
-  };
-
-  const startOverlayCommandListening = () => {
-    if (!showWeatherRef.current && !showMathRef.current) return;
-    if (overlayRecognitionRef.current) return;
-
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) return;
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = getSpeechLang(languageRef.current);
-    recognition.continuous = true;
-    // Use interim results so commands like "back" close the overlay
-    // as soon as Chrome recognizes the word instead of waiting for
-    // the browser to decide that the user has finished speaking.
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      if (!showWeatherRef.current && !showMathRef.current) return;
-      setListening(true);
-      setStatus("SAY BACK OR CLOSE TO EXIT");
-    };
-
-    recognition.onresult = (event) => {
-      const lastResult = event.results[event.results.length - 1];
-      const transcript = lastResult[0].transcript.trim();
-
-      console.log("ATLAS OVERLAY COMMAND HEARD:", transcript, lastResult.isFinal ? "final" : "interim");
-
-      // Close immediately on an interim match. We do not need to wait
-      // for Chrome's final speech boundary for a one/two-word command.
-      if (isOverlayCloseCommand(transcript)) {
-        closeActiveOverlay();
-      }
-    };
-
-    recognition.onerror = (event) => {
-      console.log("ATLAS overlay command error:", event.error);
-
-      if (event.error === "not-allowed") {
-        overlayRecognitionRef.current = null;
-        setListening(false);
-      }
-    };
-
-    recognition.onend = () => {
-      setListening(false);
-
-      if (overlayRecognitionRef.current !== recognition) return;
-      overlayRecognitionRef.current = null;
-
-      if (!showWeatherRef.current && !showMathRef.current) return;
-      if (overlayRestartTimerRef.current) return;
-
-      overlayRestartTimerRef.current = setTimeout(() => {
-        overlayRestartTimerRef.current = null;
-        startOverlayCommandListening();
-      }, 100);
-    };
-
-    overlayRecognitionRef.current = recognition;
-
-    try {
-      recognition.start();
-    } catch (error) {
-      console.log("ATLAS overlay listener start error:", error);
-      overlayRecognitionRef.current = null;
-    }
-  };
-
-  // =========================================================
   // PROCESS QUESTION
   // =========================================================
 
@@ -968,11 +857,7 @@ function App() {
     const lowerQuestion =
       question.toLowerCase().trim();
 
-    if (
-      (showWeatherRef.current || showMathRef.current) &&
-      isOverlayCloseCommand(lowerQuestion)
-    ) {
-      closeActiveOverlay();
+    if (handleNewsCommand(question)) {
       return;
     }
 
@@ -1131,6 +1016,7 @@ function App() {
     if (showMusicRef.current) return;
     if (showWeatherRef.current) return;
     if (showMathRef.current) return;
+    if (showNewsRef.current) return;
     if (isProcessingRef.current) return;
 
     const SpeechRecognition =
@@ -1242,7 +1128,7 @@ function App() {
 
       if (intentionallyStopped) return;
       if (isProcessingRef.current) return;
-      if (showMusicRef.current || showWeatherRef.current || showMathRef.current) {
+      if (showMusicRef.current || showWeatherRef.current || showMathRef.current || showNewsRef.current) {
         return;
       }
 
@@ -1257,7 +1143,8 @@ function App() {
           !isProcessingRef.current &&
           !showMusicRef.current &&
           !showWeatherRef.current &&
-          !showMathRef.current
+          !showMathRef.current &&
+          !showNewsRef.current
         ) {
           startWakeWordDetection();
         }
@@ -1402,21 +1289,6 @@ function App() {
       }
     };
 
-  // Keep a dedicated voice listener active while Weather/Math is open.
-  // This lets the user say "back" or "close" without saying the wake word again.
-  useEffect(() => {
-    if (showWeather || showMath) {
-      const timer = setTimeout(() => {
-        startOverlayCommandListening();
-      }, 50);
-
-      return () => clearTimeout(timer);
-    }
-
-    stopOverlayCommandListening();
-    setListening(false);
-  }, [showWeather, showMath]);
-
   // =========================================================
   // AUTOMATIC BOOT
   // =========================================================
@@ -1445,8 +1317,6 @@ function App() {
       }
 
       window.speechSynthesis.cancel();
-
-      stopOverlayCommandListening();
 
       if (
         recognitionRef.current
@@ -1543,7 +1413,20 @@ function App() {
         <WeatherDialog
           location={weatherLocation}
           coords={weatherCoords}
-          onClose={closeActiveOverlay}
+          onClose={() => {
+            setShowWeather(false);
+
+            isProcessingRef.current =
+              false;
+
+            setStatus(
+              "WAITING FOR WAKE WORD"
+            );
+
+            setTimeout(() => {
+              startWakeWordDetection();
+            }, 300);
+          }}
         />
       )}
 
@@ -1551,7 +1434,36 @@ function App() {
         <MathDialog
           result={mathResult}
           question={userText}
-          onClose={closeActiveOverlay}
+          onClose={() => {
+            setShowMath(false);
+            setMathResult(null);
+            isProcessingRef.current = false;
+            setStatus("WAITING FOR WAKE WORD");
+            setTimeout(() => {
+              startWakeWordDetection();
+            }, 300);
+          }}
+        />
+      )}
+
+      {showNews && (
+        <NewsDialog
+          query={newsQuery}
+          onSpeak={(text) => {
+            setAiText(text);
+            speak(text);
+          }}
+          onClose={() => {
+            setShowNews(false);
+            setNewsQuery("latest news");
+            window.speechSynthesis.cancel();
+            setSpeaking(false);
+            isProcessingRef.current = false;
+            setStatus("WAITING FOR WAKE WORD");
+            setTimeout(() => {
+              startWakeWordDetection();
+            }, 80);
+          }}
         />
       )}
 
@@ -1881,7 +1793,9 @@ function App() {
                           ? lang.systemStatus.music
                           : showWeather
                             ? lang.systemStatus.weather
-                            : showMath
+                            : showNews
+                              ? "LIVE NEWS"
+                              : showMath
                               ? lang.systemStatus.math
                               : lang.systemStatus.ready}
                   </b>
@@ -1919,7 +1833,8 @@ function App() {
                         !listening &&
                         !showMusicRef.current &&
                         !showWeatherRef.current &&
-                        !showMathRef.current
+                        !showMathRef.current &&
+                        !showNewsRef.current
                       ) {
                         startQuestionListening();
                       }
@@ -2020,7 +1935,8 @@ function App() {
                       !isProcessingRef.current &&
                       !showMusicRef.current &&
                       !showWeatherRef.current &&
-                      !showMathRef.current
+                      !showMathRef.current &&
+                      !showNewsRef.current
                     ) {
                       startQuestionListening();
                     }
@@ -2106,7 +2022,9 @@ function App() {
                   ? "MUSIC SYSTEM ACTIVE"
                   : showWeather
                     ? "WEATHER SYSTEM ACTIVE"
-                    : showMath
+                    : showNews
+                      ? "LIVE NEWS ACTIVE"
+                      : showMath
                       ? "MATH CORE ACTIVE"
                       : "ALL SYSTEMS NOMINAL"}
             </span>
