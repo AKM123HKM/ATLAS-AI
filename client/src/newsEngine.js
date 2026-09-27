@@ -35,20 +35,13 @@
 //
 //     https://atlas-ai-1wd9.onrender.com/api/news
 // ------------------------------------------------------------
-
 const API_BASE =
-  (
-    typeof import.meta !== "undefined" &&
-    import.meta.env?.VITE_ATLAS_API_URL
-  ) ||
+  (typeof import.meta !== "undefined" &&
+    import.meta.env?.VITE_ATLAS_API_URL) ||
   "https://atlas-ai-1wd9.onrender.com";
 
-
-// Remove a trailing slash if the environment variable
-// contains one.
 const NORMALIZED_API_BASE =
   String(API_BASE).replace(/\/+$/, "");
-
 
 const NEWS_ENDPOINT =
   `${NORMALIZED_API_BASE}/api/news`;

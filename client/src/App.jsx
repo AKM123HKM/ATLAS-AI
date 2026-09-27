@@ -175,6 +175,16 @@ async function getApproxLocationByIP() {
   return null;
 }
 
+function isHomeCommandPhrase(value) {
+  const phrase = String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return /^(?:(?:please|hey|okay|ok|atlas) )*(?:(?:go|navigate|return|take me|bring me)(?: back)?(?: to)? |back to )?(?:the )?(?:atlas )?home(?: page| screen)?(?: please)?$/.test(phrase);
+}
+
 // =========================================================
 // APP
 // =========================================================
@@ -248,6 +258,7 @@ function App() {
 
   const recognitionRef = useRef(null);
   const wakeWordRecognitionRef = useRef(null);
+  const dialogCommandRecognitionRef = useRef(null);
   const wakeRestartTimerRef = useRef(null);
   const wakeSessionIdRef = useRef(0);
 
@@ -275,10 +286,93 @@ function App() {
     showNewsRef.current = showNews;
   }, [showNews]);
 
+  const handleBack = () => {
+    const hasActiveView =
+      showNewsRef.current || showNews ||
+      showMathRef.current || showMath ||
+      showWeatherRef.current || showWeather ||
+      showMusicRef.current || showMusic ||
+      showResults;
+
+    if (!hasActiveView) return false;
+
+    speechSessionRef.current += 1;
+    window.speechSynthesis.cancel();
+    setSpeaking(false);
+    speechQueueRef.current = [];
+    speechIndexRef.current = 0;
+
+    if (showNewsRef.current || showNews) {
+      setShowNews(false);
+      setNewsQuery("latest news");
+    } else if (showMathRef.current || showMath) {
+      setShowMath(false);
+      setMathResult(null);
+    } else if (showWeatherRef.current || showWeather) {
+      setShowWeather(false);
+    } else if (showMusicRef.current || showMusic) {
+      setShowMusic(false);
+      setSongToPlay(null);
+    } else if (showResults) {
+      setShowResults(false);
+      setResult(null);
+      setAiText("");
+      setUserText("");
+    }
+
+    isProcessingRef.current = false;
+    setStatus("WAITING FOR WAKE WORD");
+    setTimeout(() => startWakeWordDetection(), 300);
+    return true;
+  };
+
+  const handleHome = () => {
+    console.log("ATLAS COMMAND: HOME — returning to the globe dashboard");
+    speechSessionRef.current += 1;
+    window.speechSynthesis.cancel();
+    setSpeaking(false);
+    speechQueueRef.current = [];
+    speechIndexRef.current = 0;
+
+    setShowNews(false);
+    setNewsQuery("latest news");
+    setShowMath(false);
+    setMathResult(null);
+    setShowWeather(false);
+    setShowMusic(false);
+    setSongToPlay(null);
+    setShowResults(false);
+    setResult(null);
+    setAiText("");
+    setUserText("");
+
+    isProcessingRef.current = false;
+    setStatus("WAITING FOR WAKE WORD");
+    setTimeout(() => startWakeWordDetection(), 300);
+  };
+
+  const handleHomeRef = useRef(handleHome);
+  handleHomeRef.current = handleHome;
+
+  const handleBackRef = useRef(handleBack);
+  handleBackRef.current = handleBack;
+
+  useEffect(() => {
+    const handleBackShortcut = (event) => {
+      if (event.altKey && event.key === "ArrowLeft") {
+        if (handleBackRef.current()) event.preventDefault();
+      }
+    };
+
+    window.addEventListener("keydown", handleBackShortcut);
+    return () => window.removeEventListener("keydown", handleBackShortcut);
+  }, []);
+
   const isProcessingRef = useRef(false);
 
   const speechQueueRef = useRef([]);
   const speechIndexRef = useRef(0);
+  const speechSessionRef = useRef(0);
 
   // =========================================================
   // LIVE FEED LOG (right panel) — a running record of what
@@ -695,6 +789,7 @@ function App() {
       return;
     }
 
+    const speechSession = ++speechSessionRef.current;
     window.speechSynthesis.cancel();
 
     const speechLang = getSpeechLang(languageRef.current);
@@ -757,10 +852,12 @@ function App() {
     setSpeaking(true);
     setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
 
-    speakNextChunk(speechLang, voice);
+    speakNextChunk(speechLang, voice, speechSession);
   };
 
-  const speakNextChunk = (speechLang, voice) => {
+  const speakNextChunk = (speechLang, voice, speechSession) => {
+    if (speechSession !== speechSessionRef.current) return;
+
     const queue = speechQueueRef.current;
 
     const index =
@@ -813,28 +910,35 @@ function App() {
     utterance.volume = 1;
 
     utterance.onstart = () => {
+      if (speechSession !== speechSessionRef.current) return;
       setSpeaking(true);
       setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
     };
 
     utterance.onend = () => {
+      if (speechSession !== speechSessionRef.current) return;
       speechIndexRef.current += 1;
 
       setTimeout(() => {
-        speakNextChunk(speechLang, voice);
+        speakNextChunk(speechLang, voice, speechSession);
       }, 50);
     };
 
     utterance.onerror = (event) => {
-      console.error(
-        "Speech error:",
-        event
-      );
+      if (speechSession !== speechSessionRef.current) return;
+
+      if (event.error !== "interrupted" && event.error !== "canceled") {
+        console.error("Speech error:", event);
+      }
+
+      if (event.error === "interrupted" || event.error === "canceled") {
+        return;
+      }
 
       speechIndexRef.current += 1;
 
       setTimeout(() => {
-        speakNextChunk(speechLang, voice);
+        speakNextChunk(speechLang, voice, speechSession);
       }, 50);
     };
 
@@ -852,10 +956,20 @@ function App() {
   ) => {
     if (!question.trim()) return;
 
-    logInteraction(question);
-
     const lowerQuestion =
       question.toLowerCase().trim();
+
+    if (isHomeCommandPhrase(lowerQuestion)) {
+      handleHomeRef.current();
+      return;
+    }
+
+    if (/^(?:please\s+)?(?:go\s+)?(?:back|close|exit|return)(?:\s+(?:(?:to|this|the)\s+)?(?:atlas|home|previous|screen|page|window|dialog|box|menu|news|weather|music|math))?$/i.test(lowerQuestion)) {
+      handleBack();
+      return;
+    }
+
+    logInteraction(question);
 
     if (handleNewsCommand(question)) {
       return;
@@ -1289,6 +1403,112 @@ function App() {
       }
     };
 
+  // Keep back/close voice commands available in dialogs and results,
+  // when users should not need to say the wake word first.
+  useEffect(() => {
+    const backCommandActive =
+      showMusic || showWeather || showMath || showNews || showResults;
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!backCommandActive) return undefined;
+    if (!SpeechRecognition) {
+      console.warn("ATLAS COMMAND LISTENER: SpeechRecognition is unavailable in this browser");
+      return undefined;
+    }
+
+    console.log("ATLAS COMMAND LISTENER: opening back/home voice listener");
+
+    let disposed = false;
+    let restartTimer = null;
+    let recognition = null;
+
+    const startDialogListener = () => {
+      if (disposed) return;
+
+      recognition = new SpeechRecognition();
+      dialogCommandRecognitionRef.current = recognition;
+      recognition.lang = getSpeechLang(languageRef.current);
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        console.log("ATLAS COMMAND LISTENER: listening for home/back/close");
+        setListening(true);
+      };
+
+      recognition.onresult = (event) => {
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          const heard = event.results[i][0].transcript;
+          const phrase = heard
+            .toLowerCase()
+            .replace(/[^a-z\s]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+          console.log("ATLAS COMMAND LISTENER HEARD:", heard, "=>", phrase);
+
+          if (isHomeCommandPhrase(phrase)) {
+            console.log("ATLAS COMMAND MATCH: HOME");
+            handleHomeRef.current();
+            return;
+          }
+
+          if (/^(?:please )?(?:go )?(?:back|close|exit|return)(?: (?:(?:to|this|the) )?(?:atlas|home|previous|screen|page|window|dialog|box|menu|news|weather|music|math))?$/.test(phrase)) {
+            console.log("ATLAS COMMAND MATCH: BACK/CLOSE");
+            handleBackRef.current();
+            return;
+          }
+
+          console.log("ATLAS COMMAND LISTENER: phrase did not match a navigation command");
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error("ATLAS COMMAND LISTENER ERROR:", event.error, event.message || "");
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          disposed = true;
+        }
+      };
+
+      recognition.onend = () => {
+        setListening(false);
+        console.log("ATLAS COMMAND LISTENER: stopped", disposed ? "(closed)" : "(restarting)");
+        if (dialogCommandRecognitionRef.current === recognition) {
+          dialogCommandRecognitionRef.current = null;
+        }
+        if (!disposed) {
+          restartTimer = setTimeout(startDialogListener, 400);
+        }
+      };
+
+      try {
+        recognition.start();
+      } catch (error) {
+        console.error("ATLAS COMMAND LISTENER START ERROR:", error);
+        if (!disposed) restartTimer = setTimeout(startDialogListener, 800);
+      }
+    };
+
+    startDialogListener();
+
+    return () => {
+      disposed = true;
+      setListening(false);
+      console.log("ATLAS COMMAND LISTENER: closing");
+      if (restartTimer) clearTimeout(restartTimer);
+      if (dialogCommandRecognitionRef.current === recognition) {
+        dialogCommandRecognitionRef.current = null;
+      }
+      try {
+        recognition?.stop();
+      } catch (error) {
+        // Recognition may already have stopped as the dialog closed.
+      }
+    };
+  }, [showMusic, showWeather, showMath, showNews, showResults]);
+
   // =========================================================
   // AUTOMATIC BOOT
   // =========================================================
@@ -1456,7 +1676,10 @@ function App() {
           onClose={() => {
             setShowNews(false);
             setNewsQuery("latest news");
+            speechSessionRef.current += 1;
             window.speechSynthesis.cancel();
+            speechQueueRef.current = [];
+            speechIndexRef.current = 0;
             setSpeaking(false);
             isProcessingRef.current = false;
             setStatus("WAITING FOR WAKE WORD");

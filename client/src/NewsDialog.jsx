@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -77,6 +78,9 @@ export default function NewsDialog({
   onClose,
   onSpeak,
 }) {
+  const onSpeakRef = useRef(onSpeak);
+  onSpeakRef.current = onSpeak;
+
   const [data, setData] =
     useState(null);
 
@@ -113,7 +117,7 @@ export default function NewsDialog({
             !isRefresh &&
             onSpeak
           ) {
-            onSpeak(
+            onSpeakRef.current?.(
               newsToSpeech(result)
             );
           }
@@ -132,7 +136,7 @@ export default function NewsDialog({
           setRefreshing(false);
         }
       },
-      [query, onSpeak]
+      [query]
     );
 
   useEffect(() => {
