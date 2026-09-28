@@ -216,6 +216,53 @@
   letter-spacing: 3.3px;
 }
 
+.results-content.features-content::before {
+  content: "ATLAS CAPABILITIES";
+}
+
+.results-content.features-content::after {
+  content: "VOICE CONTROL / ENGLISH + HINDI";
+}
+
+.feature-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: atlas-feature;
+}
+
+.feature-list li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 62px;
+  padding: 11px 13px 11px 43px;
+  box-sizing: border-box;
+  border: 1px solid rgba(30, 215, 240, 0.18);
+  background: linear-gradient(135deg, rgba(8, 34, 42, 0.70), rgba(3, 17, 23, 0.72));
+  color: rgba(225, 244, 247, 0.88);
+  font-size: clamp(11px, 0.88vw, 13px);
+  line-height: 1.45;
+  counter-increment: atlas-feature;
+}
+
+.feature-list li::before {
+  content: counter(atlas-feature, decimal-leading-zero);
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #20d9f2;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
 .results-content::after {
   content: "A.T.L.A.S / KNOWLEDGE SYNTHESIS";
   position: absolute;
@@ -783,6 +830,16 @@
   .results-content p {
     font-size: 14px;
     line-height: 1.65;
+  }
+
+  .feature-list {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .feature-list li {
+    min-height: 54px;
+    font-size: 12px;
   }
 
   .results-side {

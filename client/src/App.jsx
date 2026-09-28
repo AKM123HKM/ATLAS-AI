@@ -10,6 +10,10 @@ import { isNewsQuestion } from "./newsEngine";
 import { parseDictionaryQuestion } from "./dictionaryEngine";
 import { lookupFastDictionary } from "./fastDictionary";
 import { usePersonPresence } from "./usePersonPresence";
+import {
+  getAtlasFeaturesResult,
+  isAtlasFeaturesQuestion,
+} from "./featuresAnswer";
 import { solveMath, isMathQuestion } from "./mathEngine";
 import AtlasGlobe from "./AtlasGlobe";
 import LanguageToggle from "./components/LanguageToggle";
@@ -1031,6 +1035,20 @@ function App() {
 
     logInteraction(question);
 
+    if (isAtlasFeaturesQuestion(question)) {
+      questionAbortRef.current?.abort();
+      questionAbortRef.current = null;
+      const featureResult = getAtlasFeaturesResult(languageRef.current);
+      setUserText(question);
+      setAiText(featureResult.answer);
+      setResult(featureResult);
+      setShowResults(true);
+      setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
+      isProcessingRef.current = true;
+      speak(featureResult.spokenAnswer, languageRef.current);
+      return;
+    }
+
     if (handleNewsCommand(question)) {
       return;
     }
@@ -1585,7 +1603,11 @@ function App() {
 
             if (/\b(?:back|close|closed|closer|exit|return|dismiss|leave)\b/i.test(phrase)) {
               console.log("ATLAS COMMAND MATCH: BACK/CLOSE", phrase);
-              handleBackRef.current();
+              if (showResultsRef.current || showResults) {
+                handleHomeRef.current();
+              } else {
+                handleBackRef.current();
+              }
               return;
             }
 
@@ -1602,7 +1624,11 @@ function App() {
 
             if (/^(?:back|go back|close|close it|exit|return|return back|बंद|बंद करो|बंद कर दो|वापस|वापस जाओ|पीछे जाओ)$/i.test(commandPhrase)) {
               console.log("ATLAS COMMAND MATCH: BACK/CLOSE", commandPhrase);
-              handleBackRef.current();
+              if (showResultsRef.current || showResults) {
+                handleHomeRef.current();
+              } else {
+                handleBackRef.current();
+              }
               return;
             }
 
@@ -2158,12 +2184,23 @@ function App() {
                   </div>
                 )}
 
-                <div className="results-content">
-                  {(result.paragraphs || []).map((paragraph, index) => (
-                    <p key={index}>{paragraph}</p>
-                  ))}
+                <div
+                  className={`results-content${result.featureList ? " features-content" : ""}`}
+                >
+                  {result.featureList?.length ? (
+                    <ul className="feature-list">
+                      {result.featureList.map((feature, index) => (
+                        <li key={index}>{feature}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    (result.paragraphs || []).map((paragraph, index) => (
+                      <p key={index}>{paragraph}</p>
+                    ))
+                  )}
 
                   {result.answer &&
+                    !result.featureList?.length &&
                     (!result.paragraphs || result.paragraphs.length === 0) && (
                       <p>{result.answer}</p>
                     )}
