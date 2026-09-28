@@ -9,6 +9,7 @@ import NewsDialog from "./NewsDialog";
 import { isNewsQuestion } from "./newsEngine";
 import { parseDictionaryQuestion } from "./dictionaryEngine";
 import { lookupFastDictionary } from "./fastDictionary";
+import { usePersonPresence } from "./usePersonPresence";
 import { solveMath, isMathQuestion } from "./mathEngine";
 import AtlasGlobe from "./AtlasGlobe";
 import LanguageToggle from "./components/LanguageToggle";
@@ -278,6 +279,9 @@ function App() {
   const [weatherCoords, setWeatherCoords] = useState(null);
 
   const [booted, setBooted] = useState(false);
+  const [presenceArmed, setPresenceArmed] = useState(false);
+  const [presenceVideoReady, setPresenceVideoReady] = useState(false);
+  const [presenceDetected, setPresenceDetected] = useState(false);
   const [status, setStatus] = useState("SYSTEM INITIALIZING");
 
   const [userText, setUserText] = useState("");
@@ -290,6 +294,7 @@ function App() {
   const [listening, setListening] = useState(false);
 
   const recognitionRef = useRef(null);
+  const presenceVideoRef = useRef(null);
   const wakeWordRecognitionRef = useRef(null);
   const dialogCommandRecognitionRef = useRef(null);
   const preferenceRecognitionRef = useRef(null);
@@ -1872,17 +1877,31 @@ function App() {
     );
   };
 
+  usePersonPresence(presenceArmed, presenceVideoRef, {
+    onStatus: setStatus,
+    onCameraReady: () => setPresenceVideoReady(true),
+    onDetected: () => {
+      setPresenceDetected(true);
+      setStatus("PERSON DETECTED — CAMERA PREVIEW ON");
+      const greeting = getLanguagePack("en").greeting;
+      setAiText(greeting);
+      speak(greeting, "en", askLanguagePreference);
+    },
+    onUnavailable: (error) => {
+      console.warn("ATLAS PRESENCE CAMERA UNAVAILABLE:", error);
+      setPresenceVideoReady(false);
+      setPresenceArmed(false);
+      setPresenceDetected(false);
+      setStatus("CAMERA UNAVAILABLE — SAY ATLAS TO START");
+      setTimeout(() => startWakeWordDetection(), 300);
+    },
+  });
+
   useEffect(() => {
     const bootTimer = setTimeout(() => {
       setBooted(true);
-
-      const greeting = getLanguagePack("en").greeting;
-
-      setAiText(greeting);
-
-      setTimeout(() => {
-        speak(greeting, "en", askLanguagePreference);
-      }, 500);
+      setStatus("REQUESTING CAMERA ACCESS");
+      setPresenceArmed(true);
     }, 3000);
 
     return () => {
@@ -1960,6 +1979,53 @@ function App() {
       <ParticleField />
 
       <HudFrame />
+
+      {presenceArmed && (
+        <aside className="presence-camera-card" aria-label="Camera presence detection">
+          <div className="presence-camera-heading">
+            <span className="status-dot" />
+            {presenceDetected ? "LIVE CAMERA PREVIEW" : "PRESENCE SCAN"}
+          </div>
+          <div className="presence-camera-frame">
+            <video
+              ref={presenceVideoRef}
+              autoPlay
+              muted
+              playsInline
+              aria-label="Live camera preview"
+            />
+            {!presenceVideoReady && (
+              <div className="presence-camera-placeholder">ALLOW CAMERA ACCESS</div>
+            )}
+          </div>
+          <div className="presence-camera-footer">
+            <span>
+              {!presenceVideoReady
+                ? "CAMERA STARTING"
+                : presenceDetected
+                  ? "ON-DEVICE · LIVE"
+                  : "ON-DEVICE · 3 SEC CHECK"}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setPresenceVideoReady(false);
+                setPresenceArmed(false);
+                setPresenceDetected(false);
+                if (!presenceDetected) {
+                  setStatus("CAMERA OFF — SAY ATLAS TO START");
+                  setTimeout(() => startWakeWordDetection(), 300);
+                } else {
+                  setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
+                }
+              }}
+              aria-label="Turn off camera"
+            >
+              TURN OFF CAMERA
+            </button>
+          </div>
+        </aside>
+      )}
 
       {showMusic && (
         <MusicPlayer
@@ -2074,15 +2140,6 @@ function App() {
                 <span>QUERY</span>
 
                 <span className="query-text">{userText}</span>
-
-                <button
-                  type="button"
-                  className="cancel-question-btn"
-                  onClick={cancelCurrentQuestion}
-                  aria-label={language === "hi" ? "सवाल रद्द करें" : "Cancel question"}
-                >
-                  {language === "hi" ? "रद्द करें" : "CANCEL"}
-                </button>
               </div>
             </div>
 
@@ -2112,49 +2169,6 @@ function App() {
                     )}
                 </div>
 
-                {result.keyFacts && result.keyFacts.length > 0 && (
-                  <div className="facts-section">
-                    <div className="section-heading">KEY FACTS</div>
-
-                    <div className="facts-grid">
-                      {result.keyFacts.map((fact, index) => (
-                        <div className="fact-card" key={index}>
-                          <span>{String(index + 1).padStart(2, "0")}</span>
-
-                          <p>{fact}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {result.relatedLinks && result.relatedLinks.length > 0 && (
-                  <div className="links-section">
-                    <div className="section-heading">EXPLORE FURTHER</div>
-
-                    <div className="links-grid">
-                      {result.relatedLinks.map((link, index) => (
-                        <a
-                          key={index}
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="knowledge-link"
-                        >
-                          <span className="link-number">0{index + 1}</span>
-
-                          <div>
-                            <strong>{link.title}</strong>
-
-                            <small>{link.description}</small>
-                          </div>
-
-                          <span className="link-arrow">↗</span>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </section>
 
               <aside className="results-side">
@@ -2177,24 +2191,74 @@ function App() {
                   </p>
                 </div>
 
-                <button
-                  className="back-command"
-                  onClick={() => {
-                    setShowResults(false);
+                {result.keyFacts && result.keyFacts.length > 0 && (
+                  <div className="facts-section">
+                    <div className="section-heading">KEY FACTS</div>
 
-                    setResult(null);
+                    <div className="facts-grid">
+                      {result.keyFacts.map((fact, index) => (
+                        <div className="fact-card" key={index}>
+                          <span>{String(index + 1).padStart(2, "0")}</span>
+                          <p>{fact}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                    setAiText("");
+                {result.relatedLinks && result.relatedLinks.length > 0 && (
+                  <div className="links-section">
+                    <div className="section-heading">EXPLORE FURTHER</div>
 
-                    setUserText("");
+                    <div className="links-grid">
+                      {result.relatedLinks.map((link, index) => (
+                        <a
+                          key={index}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="knowledge-link"
+                        >
+                          <span className="link-number">0{index + 1}</span>
+                          <div>
+                            <strong>{link.title}</strong>
+                            <small>{link.description}</small>
+                          </div>
+                          <span className="link-arrow">↗</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                    setTimeout(() => {
-                      startWakeWordDetection();
-                    }, 300);
-                  }}
-                >
-                  ← RETURN TO ATLAS
-                </button>
+                <div className="results-navigation-actions">
+                  <button
+                    className="back-command"
+                    onClick={() => {
+                      setShowResults(false);
+
+                      setResult(null);
+
+                      setAiText("");
+
+                      setUserText("");
+
+                      setTimeout(() => {
+                        startWakeWordDetection();
+                      }, 300);
+                    }}
+                  >
+                    ← RETURN TO ATLAS
+                  </button>
+                  <button
+                    type="button"
+                    className="cancel-question-btn results-cancel-btn"
+                    onClick={cancelCurrentQuestion}
+                    aria-label={language === "hi" ? "सवाल रद्द करें" : "Cancel question"}
+                  >
+                    {language === "hi" ? "रद्द करें" : "CANCEL QUESTION"}
+                  </button>
+                </div>
               </aside>
             </div>
           </main>

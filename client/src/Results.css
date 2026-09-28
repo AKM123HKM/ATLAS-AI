@@ -8,10 +8,12 @@
 .results-page {
   position: relative;
   width: 100%;
-  height: calc(100vh - 104px);
+  height: calc(100dvh - 74px);
   min-height: 0;
   overflow: hidden;
   padding: 28px 3.2vw 22px;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
   color: #dffaff;
 }
@@ -37,6 +39,7 @@
 .results-header {
   position: relative;
   z-index: 2;
+  flex: 0 0 auto;
   width: 100%;
   margin-bottom: 22px;
 }
@@ -102,12 +105,6 @@
   white-space: nowrap;
 }
 
-.question-display .cancel-question-btn {
-  flex: 0 0 auto;
-  position: relative;
-  z-index: 4;
-}
-
 /* =========================================================
    MAIN CONSOLE
    Left = report
@@ -121,7 +118,8 @@
   grid-template-columns: minmax(0, 1fr) 455px;
   gap: 34px;
   width: 100%;
-  height: calc(100% - 112px);
+  height: auto;
+  flex: 1 1 auto;
   min-height: 0;
 }
 
@@ -547,6 +545,31 @@
   transform: translateY(0);
 }
 
+.results-navigation-actions {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.results-cancel-btn {
+  width: 100%;
+  min-height: 36px;
+  border-radius: 3px;
+  border-color: rgba(255, 125, 125, 0.32);
+  background: rgba(255, 105, 105, 0.035);
+  color: rgba(255, 190, 190, 0.76);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+}
+
+.results-cancel-btn:hover,
+.results-cancel-btn:focus-visible {
+  border-color: rgba(255, 125, 125, 0.68);
+  background: rgba(255, 105, 105, 0.10);
+  color: #ffe4e4;
+}
+
 /* =========================================================
    HUD CORNER
    ========================================================= */
@@ -642,7 +665,7 @@
   }
 
   .results-layout {
-    height: calc(100% - 94px);
+    height: auto;
     gap: 28px;
     grid-template-columns: minmax(0, 1fr) 430px;
   }
