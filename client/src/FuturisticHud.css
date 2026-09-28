@@ -2110,19 +2110,21 @@ footer::before {
 }
 
 .presence-camera-footer button {
-  padding: 4px 6px;
-  border: 1px solid rgba(255, 125, 125, 0.35);
-  background: rgba(255, 105, 105, 0.05);
-  color: rgba(255, 190, 190, 0.82);
+  padding: 3px 5px;
+  border: 1px solid rgba(77, 232, 255, 0.28);
+  background: rgba(77, 232, 255, 0.035);
+  color: rgba(143, 225, 235, 0.72);
   font: inherit;
+  font-size: 6px;
   letter-spacing: inherit;
   cursor: pointer;
 }
 
 .presence-camera-footer button:hover,
 .presence-camera-footer button:focus-visible {
-  border-color: rgba(255, 125, 125, 0.72);
-  background: rgba(255, 105, 105, 0.13);
+  border-color: rgba(77, 232, 255, 0.64);
+  background: rgba(77, 232, 255, 0.10);
+  color: #bdf7ff;
 }
 
 @media (max-width: 820px) {

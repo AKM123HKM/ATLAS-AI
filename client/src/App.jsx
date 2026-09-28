@@ -2021,7 +2021,7 @@ function App() {
               }}
               aria-label="Turn off camera"
             >
-              TURN OFF CAMERA
+              CAMERA OFF
             </button>
           </div>
         </aside>
