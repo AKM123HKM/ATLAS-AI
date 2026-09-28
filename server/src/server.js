@@ -212,20 +212,44 @@ function categoryQuery(category) {
   );
 }
 
+function hindiCategoryQuery(category) {
+  const queries = {
+    general: "आज की ताज़ा खबरें",
+    world: "दुनिया की ताज़ा खबरें",
+    india: "भारत की ताज़ा खबरें",
+    technology: "तकनीक की ताज़ा खबरें",
+    science: "विज्ञान की ताज़ा खबरें",
+    business: "व्यापार की ताज़ा खबरें",
+    sports: "खेल की ताज़ा खबरें",
+    entertainment: "मनोरंजन की ताज़ा खबरें",
+    health: "स्वास्थ्य की ताज़ा खबरें",
+    politics: "राजनीति की ताज़ा खबरें",
+  };
+
+  return queries[category] || `${category} की ताज़ा खबरें`;
+}
+
 app.get("/api/news", async (req, res) => {
   try {
+    const language =
+      String(req.query.language || "en").toLowerCase() === "hi"
+        ? "hi"
+        : "en";
+
     const category = String(
       req.query.category || "general"
     ).toLowerCase();
 
     const country = String(
       req.query.country ||
-        (category === "india" ? "in" : "us")
+        (language === "hi" || category === "india" ? "in" : "us")
     ).toLowerCase();
 
     const q = String(
       req.query.q ||
-        categoryQuery(category)
+        (language === "hi"
+          ? hindiCategoryQuery(category)
+          : categoryQuery(category))
     ).trim();
 
     const limit = Math.min(
@@ -236,15 +260,122 @@ app.get("/api/news", async (req, res) => {
       20
     );
 
+    // NewsData supports Hindi articles directly. Keep its key on the server;
+    // Hindi requests use it when configured, with Google RSS as a fallback.
+    const newsDataApiKey = process.env.NEWSDATA_API_KEY;
+    if (language === "hi" && newsDataApiKey) {
+      const newsDataParams = new URLSearchParams({
+        apikey: newsDataApiKey,
+        country: "in",
+        language: "hi",
+        size: String(Math.min(limit, 10)),
+      });
+      const newsDataCategories = {
+        general: "top",
+        india: "top",
+        world: "world",
+        technology: "technology",
+        science: "science",
+        business: "business",
+        sports: "sports",
+        entertainment: "entertainment",
+        health: "health",
+        politics: "politics",
+      };
+      newsDataParams.set(
+        "category",
+        newsDataCategories[category] || "top",
+      );
+
+      const newsDataUrl =
+        `https://newsdata.io/api/1/latest?${newsDataParams.toString()}`;
+      const newsDataResponse = await fetch(newsDataUrl);
+      if (newsDataResponse.ok) {
+        const newsData = await newsDataResponse.json();
+        if (newsData.status === "success" && Array.isArray(newsData.results)) {
+          const articles = newsData.results
+            .map((article) => ({
+              title: article.title || "",
+              url: article.link || "",
+              description: article.description || article.content || "",
+              source: article.source_name || article.source_id || "",
+              publishedAt: article.pubDate || "",
+              image: article.image_url || "",
+            }))
+            .filter((article) => article.title && article.url);
+
+          if (articles.length > 0) {
+            return res.json({
+              source: "NewsData.io",
+              category,
+              country: "in",
+              language: "hi",
+              query: "",
+              fetchedAt: new Date().toISOString(),
+              articles,
+            });
+          }
+        }
+        console.error("NEWSDATA HINDI NEWS ERROR:", newsData.message || newsData.status);
+      } else {
+        console.error("NEWSDATA HINDI NEWS HTTP ERROR:", newsDataResponse.status);
+      }
+      // If NewsData is temporarily unavailable, continue to the RSS fallback.
+    }
+
+    // Google News has returned 502 for this deployment's Hindi feed. Use
+    // BBC's Hindi RSS feed as a no-key fallback so Hindi never falls through
+    // to an English feed or a generic Google-provider error.
+    if (language === "hi") {
+      const hindiFeedResponse = await fetch(
+        "https://feeds.bbci.co.uk/hindi/rss.xml",
+        { headers: { "User-Agent": "ATLAS-NewsRelay/1.0" } },
+      );
+      if (!hindiFeedResponse.ok) {
+        console.error("BBC HINDI RSS ERROR:", hindiFeedResponse.status);
+        return res.status(502).json({ error: "Hindi news source is temporarily unavailable." });
+      }
+
+      const hindiXml = await hindiFeedResponse.text();
+      const hindiArticles = [...hindiXml.matchAll(/<item>([\s\S]*?)<\/item>/gi)]
+        .slice(0, limit)
+        .map((match) => {
+          const block = match[1];
+          return {
+            title: extractTag(block, "title"),
+            url: extractTag(block, "link"),
+            description: extractTag(block, "description").replace(/<[^>]+>/g, "").trim(),
+            source: "BBC Hindi",
+            publishedAt: extractTag(block, "pubDate"),
+          };
+        })
+        .filter((article) => article.title && article.url);
+
+      if (!hindiArticles.length) {
+        return res.status(502).json({ error: "Hindi news source returned no headlines." });
+      }
+
+      res.set("Cache-Control", "no-store");
+      return res.json({
+        source: "BBC Hindi RSS",
+        category,
+        country: "in",
+        language: "hi",
+        query: "",
+        fetchedAt: new Date().toISOString(),
+        articles: hindiArticles,
+      });
+    }
+
     const params = new URLSearchParams({
       q,
-      hl:
-        country === "in"
+      hl: language === "hi"
+        ? "hi-IN"
+        : country === "in"
           ? "en-IN"
           : "en-US",
       gl: country.toUpperCase(),
-      ceid:
-        `${country.toUpperCase()}:en`,
+      ceid: `${country.toUpperCase()}:${language}`,
     });
 
     const rssUrl =
@@ -341,6 +472,8 @@ app.get("/api/news", async (req, res) => {
       category,
 
       country,
+
+      language,
 
       query: q,
 
