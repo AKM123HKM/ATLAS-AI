@@ -8,6 +8,7 @@ import MathDialog from "./MathDialog";
 import NewsDialog from "./NewsDialog";
 import { isNewsQuestion } from "./newsEngine";
 import { parseDictionaryQuestion } from "./dictionaryEngine";
+import { lookupFastDictionary } from "./fastDictionary";
 import { solveMath, isMathQuestion } from "./mathEngine";
 import AtlasGlobe from "./AtlasGlobe";
 import LanguageToggle from "./components/LanguageToggle";
@@ -1140,9 +1141,36 @@ function App() {
       const controller = new AbortController();
       questionAbortRef.current = controller;
       try {
+        const selectedLanguage = languageRef.current;
+        let fastResult = null;
+        try {
+          fastResult = await lookupFastDictionary(
+            dictionaryWord,
+            selectedLanguage,
+            controller.signal,
+          );
+        } catch (fastLookupError) {
+          if (controller.signal.aborted) return;
+          console.warn("ATLAS FAST DICTIONARY LOOKUP:", fastLookupError);
+        }
+        if (
+          controller.signal.aborted ||
+          questionGeneration !== questionGenerationRef.current
+        ) return;
+
+        if (fastResult) {
+          questionAbortRef.current = null;
+          setAiText(fastResult.answer);
+          setResult(fastResult);
+          setShowResults(true);
+          setStatus(getLanguagePack(selectedLanguage).systemStatus.speaking);
+          speak(fastResult.answer, selectedLanguage);
+          return;
+        }
+
         const params = new URLSearchParams({
           word: dictionaryWord,
-          language: languageRef.current,
+          language: selectedLanguage,
         });
         const response = await fetch(
           `https://atlas-ai-1wd9.onrender.com/api/dictionary?${params.toString()}`,
