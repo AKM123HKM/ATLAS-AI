@@ -43,6 +43,8 @@ const hindi = {
   // Hindi speech recognition (hi-IN) will transcribe these in
   // Devanagari, so matching happens against these exact strings.
   wakeWords: [
+    "namaste",
+    "namaste atlas",
     "हैलो एटलस",
     "नमस्ते एटलस",
     "नमस्ते",

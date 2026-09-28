@@ -59,6 +59,22 @@ export default function MusicPlayer({ onClose, songToPlay, controlsRef }) {
   const ytPlayerRef = useRef(null);
   const ytContainerRef = useRef(null);
   const progressTimerRef = useRef(null);
+  const lastNonZeroVolumeRef = useRef(1);
+  const onlineResultsRef = useRef([]);
+  const currentSongRef = useRef(null);
+  const modeRef = useRef(null);
+  const playingRef = useRef(false);
+  const commandBusyRef = useRef(false);
+
+  useEffect(() => {
+    currentSongRef.current = currentSong;
+    modeRef.current = mode;
+    playingRef.current = playing;
+  }, [currentSong, mode, playing]);
+
+  useEffect(() => {
+    onlineResultsRef.current = onlineResults;
+  }, [onlineResults]);
 
   // =========================================================
   // LOAD YOUTUBE IFRAME API (once)
@@ -361,64 +377,6 @@ export default function MusicPlayer({ onClose, songToPlay, controlsRef }) {
     }
   };
 
-  const setPlayback = async (shouldPlay) => {
-    if (!currentSong || playing === shouldPlay) return;
-    if (mode === "youtube") {
-      if (!ytPlayerRef.current) return;
-      if (shouldPlay) ytPlayerRef.current.playVideo();
-      else ytPlayerRef.current.pauseVideo();
-      return;
-    }
-    if (!audioRef.current) return;
-    if (shouldPlay) {
-      try {
-        await audioRef.current.play();
-        setPlaying(true);
-      } catch (error) {
-        console.error("VOICE PLAY COMMAND ERROR:", error);
-      }
-    } else {
-      audioRef.current.pause();
-      setPlaying(false);
-    }
-  };
-
-  const changeTrack = (direction) => {
-    if (mode === "youtube" && onlineResults.length) {
-      const currentIndex = onlineResults.findIndex(
-        (video) => video.videoId === currentSong?.videoId,
-      );
-      const nextIndex = currentIndex < 0
-        ? 0
-        : (currentIndex + direction + onlineResults.length) % onlineResults.length;
-      selectOnlineSong(onlineResults[nextIndex]);
-      return;
-    }
-
-    const currentIndex = localSongs.findIndex(
-      (song) => song.id === currentSong?.id || song.title === currentSong?.title,
-    );
-    const nextIndex = currentIndex < 0
-      ? (direction > 0 ? 0 : localSongs.length - 1)
-      : (currentIndex + direction + localSongs.length) % localSongs.length;
-    selectLocalSong(localSongs[nextIndex]);
-  };
-
-  useEffect(() => {
-    if (!controlsRef) return undefined;
-    controlsRef.current = {
-      play: () => setPlayback(true),
-      pause: () => setPlayback(false),
-      toggle: togglePlay,
-      next: () => changeTrack(1),
-      previous: () => changeTrack(-1),
-      close: handleClose,
-    };
-    return () => {
-      controlsRef.current = null;
-    };
-  });
-
   // =========================================================
   // PROGRESS (local <audio>)
   // =========================================================
@@ -459,6 +417,165 @@ export default function MusicPlayer({ onClose, songToPlay, controlsRef }) {
   };
 
   // =========================================================
+  // ATLAS VOICE CONTROLS
+  // Direct local control API — never touches the AI backend.
+  // =========================================================
+
+  const playMusic = async () => {
+    if (!currentSongRef.current) return false;
+
+    if (modeRef.current === "youtube") {
+      try {
+        ytPlayerRef.current?.playVideo?.();
+        return true;
+      } catch (error) {
+        console.error("ATLAS MUSIC PLAY ERROR:", error);
+        return false;
+      }
+    }
+
+    if (!audioRef.current) return false;
+    try {
+      await audioRef.current.play();
+      setPlaying(true);
+      return true;
+    } catch (error) {
+      console.error("ATLAS MUSIC PLAY ERROR:", error);
+      return false;
+    }
+  };
+
+  const pauseMusic = () => {
+    if (modeRef.current === "youtube") {
+      try {
+        ytPlayerRef.current?.pauseVideo?.();
+        return true;
+      } catch (error) {
+        console.error("ATLAS MUSIC PAUSE ERROR:", error);
+        return false;
+      }
+    }
+    if (!audioRef.current) return false;
+    audioRef.current.pause();
+    setPlaying(false);
+    return true;
+  };
+
+  const nextMusic = () => {
+    if (commandBusyRef.current) return false;
+    commandBusyRef.current = true;
+    setTimeout(() => { commandBusyRef.current = false; }, 250);
+
+    const current = currentSongRef.current;
+
+    if (modeRef.current === "local") {
+      const index = localSongs.findIndex((song) => song.id === current?.id);
+      const nextIndex = index >= 0 ? (index + 1) % localSongs.length : 0;
+      setActiveTab("local");
+      playLocalSong(localSongs[nextIndex]);
+      return true;
+    }
+
+    if (modeRef.current === "youtube") {
+      const results = onlineResultsRef.current;
+      if (!results.length) return false;
+      const index = results.findIndex((video) => video.videoId === current?.videoId);
+      const nextIndex = index >= 0 ? (index + 1) % results.length : 0;
+      setActiveTab("online");
+      playSongFromYouTube(results[nextIndex]);
+      return true;
+    }
+
+    return false;
+  };
+
+  const previousMusic = () => {
+    if (commandBusyRef.current) return false;
+    commandBusyRef.current = true;
+    setTimeout(() => { commandBusyRef.current = false; }, 250);
+
+    const current = currentSongRef.current;
+
+    if (modeRef.current === "local") {
+      const index = localSongs.findIndex((song) => song.id === current?.id);
+      const previousIndex = index >= 0
+        ? (index - 1 + localSongs.length) % localSongs.length
+        : localSongs.length - 1;
+      setActiveTab("local");
+      playLocalSong(localSongs[previousIndex]);
+      return true;
+    }
+
+    if (modeRef.current === "youtube") {
+      const results = onlineResultsRef.current;
+      if (!results.length) return false;
+      const index = results.findIndex((video) => video.videoId === current?.videoId);
+      const previousIndex = index >= 0
+        ? (index - 1 + results.length) % results.length
+        : results.length - 1;
+      setActiveTab("online");
+      playSongFromYouTube(results[previousIndex]);
+      return true;
+    }
+
+    return false;
+  };
+
+  const volumeUp = () => {
+    if (modeRef.current === "youtube" && ytPlayerRef.current?.setVolume) {
+      const current = ytPlayerRef.current.getVolume?.() ?? 100;
+      const next = Math.min(100, current + 10);
+      ytPlayerRef.current.setVolume(next);
+      if (next > 0) lastNonZeroVolumeRef.current = next / 100;
+      return true;
+    }
+    if (!audioRef.current) return false;
+    const next = Math.min(1, audioRef.current.volume + 0.1);
+    audioRef.current.volume = next;
+    if (next > 0) lastNonZeroVolumeRef.current = next;
+    return true;
+  };
+
+  const volumeDown = () => {
+    if (modeRef.current === "youtube" && ytPlayerRef.current?.setVolume) {
+      const current = ytPlayerRef.current.getVolume?.() ?? 100;
+      const next = Math.max(0, current - 10);
+      ytPlayerRef.current.setVolume(next);
+      if (next > 0) lastNonZeroVolumeRef.current = next / 100;
+      return true;
+    }
+    if (!audioRef.current) return false;
+    const next = Math.max(0, audioRef.current.volume - 0.1);
+    audioRef.current.volume = next;
+    if (next > 0) lastNonZeroVolumeRef.current = next;
+    return true;
+  };
+
+  const muteMusic = () => {
+    if (modeRef.current === "youtube" && ytPlayerRef.current?.setVolume) {
+      const current = ytPlayerRef.current.getVolume?.() ?? 100;
+      if (current > 0) lastNonZeroVolumeRef.current = current / 100;
+      ytPlayerRef.current.setVolume(0);
+      return true;
+    }
+    if (!audioRef.current) return false;
+    if (audioRef.current.volume > 0) lastNonZeroVolumeRef.current = audioRef.current.volume;
+    audioRef.current.volume = 0;
+    return true;
+  };
+
+  const unmuteMusic = () => {
+    const restore = Math.max(0.1, Math.min(1, lastNonZeroVolumeRef.current || 1));
+    if (modeRef.current === "youtube" && ytPlayerRef.current?.setVolume) {
+      ytPlayerRef.current.setVolume(Math.round(restore * 100));
+      return true;
+    }
+    if (!audioRef.current) return false;
+    audioRef.current.volume = restore;
+    return true;
+  };
+
+  // =========================================================
   // CLOSE PLAYER
   // =========================================================
 
@@ -481,6 +598,30 @@ export default function MusicPlayer({ onClose, songToPlay, controlsRef }) {
 
     if (onClose) onClose();
   };
+
+  // =========================================================
+  // EXPOSE VOICE CONTROLS TO APP.JSX
+  // =========================================================
+
+  useEffect(() => {
+    if (!controlsRef) return undefined;
+
+    controlsRef.current = {
+      play: playMusic,
+      pause: pauseMusic,
+      next: nextMusic,
+      previous: previousMusic,
+      volumeUp,
+      volumeDown,
+      mute: muteMusic,
+      unmute: unmuteMusic,
+      close: handleClose,
+    };
+
+    return () => {
+      if (controlsRef.current) controlsRef.current = null;
+    };
+  });
 
   // =========================================================
   // UI

@@ -12,7 +12,7 @@ import {
   newsToSpeech,
 } from "./newsEngine";
 
-function formatTime(value) {
+function formatTime(value, language = "en") {
   if (!value)
     return "TIME UNKNOWN";
 
@@ -28,7 +28,7 @@ function formatTime(value) {
   }
 
   return date.toLocaleTimeString(
-    [],
+    language === "hi" ? "hi-IN" : "en-US",
     {
       hour: "2-digit",
       minute: "2-digit",
@@ -36,7 +36,7 @@ function formatTime(value) {
   );
 }
 
-function formatDate(value) {
+function formatDate(value, language = "en") {
   if (!value) return "";
 
   const date =
@@ -51,7 +51,7 @@ function formatDate(value) {
   }
 
   return date.toLocaleDateString(
-    [],
+    language === "hi" ? "hi-IN" : "en-US",
     {
       day: "2-digit",
       month: "short",
@@ -75,6 +75,7 @@ const categoryLabels = {
 
 export default function NewsDialog({
   query = "latest news",
+  language = "en",
   onClose,
   onSpeak,
 }) {
@@ -108,7 +109,7 @@ export default function NewsDialog({
           const result =
             await fetchLatestNews(
               query,
-              { limit: 10 }
+              { limit: 10, language }
             );
 
           setData(result);
@@ -118,7 +119,7 @@ export default function NewsDialog({
             onSpeak
           ) {
             onSpeakRef.current?.(
-              newsToSpeech(result)
+              newsToSpeech(result, language)
             );
           }
         } catch (err) {
@@ -136,7 +137,7 @@ export default function NewsDialog({
           setRefreshing(false);
         }
       },
-      [query]
+      [query, language]
     );
 
   useEffect(() => {
@@ -163,6 +164,19 @@ export default function NewsDialog({
   const category =
     data?.category ||
     "general";
+  const isHindi = language === "hi";
+  const hindiCategoryLabels = {
+    general: "देश और दुनिया",
+    world: "दुनिया",
+    india: "भारत",
+    technology: "तकनीक",
+    science: "विज्ञान",
+    business: "व्यापार",
+    sports: "खेल",
+    entertainment: "मनोरंजन",
+    health: "स्वास्थ्य",
+    politics: "राजनीति",
+  };
 
   return (
     <div className="atlas-news-overlay">
@@ -173,24 +187,24 @@ export default function NewsDialog({
         <header className="atlas-news-header">
           <div>
             <div className="atlas-news-eyebrow">
-              A.T.L.A.S // LIVE INTELLIGENCE FEED
+              {isHindi ? "A.T.L.A.S // लाइव समाचार" : "A.T.L.A.S // LIVE INTELLIGENCE FEED"}
             </div>
 
             <h2>
-              LATEST NEWS
+              {isHindi ? "ताज़ा समाचार" : "LATEST NEWS"}
             </h2>
 
             <div className="atlas-news-subline">
               <span className="atlas-news-live-dot" />
 
-              LIVE SOURCE // GOOGLE NEWS RSS // NO LLM REQUEST
+              {isHindi ? "लाइव स्रोत // GOOGLE NEWS RSS" : "LIVE SOURCE // GOOGLE NEWS RSS // NO LLM REQUEST"}
             </div>
           </div>
 
           <button
             className="atlas-news-close"
             onClick={onClose}
-            aria-label="Close news"
+            aria-label={isHindi ? "समाचार बंद करें" : "Close news"}
           >
             ×
           </button>
@@ -200,16 +214,11 @@ export default function NewsDialog({
 
           <div className="atlas-news-scope">
             <span>
-              CHANNEL
+              {isHindi ? "श्रेणी" : "CHANNEL"}
             </span>
 
             <strong>
-              {
-                categoryLabels[
-                  category
-                ] ||
-                  category.toUpperCase()
-              }
+              {(isHindi ? hindiCategoryLabels[category] : categoryLabels[category]) || category.toUpperCase()}
             </strong>
           </div>
 
@@ -218,7 +227,7 @@ export default function NewsDialog({
             title={query}
           >
             <span>
-              QUERY
+              {isHindi ? "आपकी खोज" : "QUERY"}
             </span>
 
             <strong>
@@ -240,7 +249,7 @@ export default function NewsDialog({
               refreshing
             }
           >
-            ↻ REFRESH
+            {isHindi ? "↻ फिर से लोड करें" : "↻ REFRESH"}
           </button>
         </div>
 
@@ -256,11 +265,11 @@ export default function NewsDialog({
               </div>
 
               <strong>
-                SCANNING LIVE HEADLINES
+                {isHindi ? "ताज़ा सुर्खियाँ खोज रहे हैं" : "SCANNING LIVE HEADLINES"}
               </strong>
 
               <small>
-                CONNECTING TO ATLAS NEWS RELAY...
+                {isHindi ? "ATLAS समाचार सेवा से जुड़ रहे हैं..." : "CONNECTING TO ATLAS NEWS RELAY..."}
               </small>
             </div>
 
@@ -269,11 +278,11 @@ export default function NewsDialog({
             <div className="atlas-news-state atlas-news-error">
 
               <div className="atlas-news-error-code">
-                NEWS // 503
+                {isHindi ? "समाचार // 503" : "NEWS // 503"}
               </div>
 
               <strong>
-                LIVE FEED UNAVAILABLE
+                {isHindi ? "समाचार अभी उपलब्ध नहीं हैं" : "LIVE FEED UNAVAILABLE"}
               </strong>
 
               <small>
@@ -285,7 +294,7 @@ export default function NewsDialog({
                   loadNews(true)
                 }
               >
-                RETRY FEED
+                {isHindi ? "फिर से प्रयास करें" : "RETRY FEED"}
               </button>
             </div>
 
@@ -295,14 +304,13 @@ export default function NewsDialog({
             <div className="atlas-news-state">
 
               <strong>
-                NO HEADLINES FOUND
+                {isHindi ? "कोई सुर्ख़ी नहीं मिली" : "NO HEADLINES FOUND"}
               </strong>
 
               <small>
-                Try “latest news”,
-                “latest technology
-                news”, or “latest
-                India news”.
+                {isHindi
+                  ? "‘आज की ताज़ा खबरें’, ‘तकनीक की खबरें’ या ‘भारत की खबरें’ कहकर खोजें।"
+                  : 'Try “latest news”, “latest technology news”, or “latest India news”.'}
               </small>
 
             </div>
@@ -338,16 +346,17 @@ export default function NewsDialog({
                     <div className="atlas-news-card-meta">
 
                       <span>
-                        {article.source ||
-                          "NEWS SOURCE"}
+                        {article.source || (isHindi ? "समाचार स्रोत" : "NEWS SOURCE")}
                       </span>
 
                       <span>
                         {formatDate(
-                          article.publishedAt
+                          article.publishedAt,
+                          language
                         )}{" "}
                         {formatTime(
-                          article.publishedAt
+                          article.publishedAt,
+                          language
                         )}
                       </span>
 
@@ -366,7 +375,7 @@ export default function NewsDialog({
                     <div className="atlas-news-card-footer">
 
                       <span>
-                        LIVE ARTICLE
+                      {isHindi ? "लाइव खबर" : "LIVE ARTICLE"}
                       </span>
 
                       {article.url && (
@@ -377,7 +386,7 @@ export default function NewsDialog({
                           target="_blank"
                           rel="noopener noreferrer"
                         >
-                          OPEN SOURCE ↗
+                          {isHindi ? "स्रोत खोलें ↗" : "OPEN SOURCE ↗"}
                         </a>
                       )}
 
@@ -394,15 +403,13 @@ export default function NewsDialog({
 
         <footer className="atlas-news-footer">
           <span>
-            ATLAS NEWS RELAY // DIRECT FEED
+            {isHindi ? "ATLAS समाचार // लाइव फ़ीड" : "ATLAS NEWS RELAY // DIRECT FEED"}
           </span>
 
           <span>
             {data?.fetchedAt
-              ? `UPDATED ${formatTime(
-                  data.fetchedAt
-                )}`
-              : "ACQUIRING FEED"}
+              ? `${isHindi ? "अपडेट" : "UPDATED"} ${formatTime(data.fetchedAt, language)}`
+              : isHindi ? "फ़ीड लोड हो रही है" : "ACQUIRING FEED"}
           </span>
         </footer>
 

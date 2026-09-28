@@ -94,6 +94,20 @@
   letter-spacing: 2.8px;
 }
 
+.question-display .query-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.question-display .cancel-question-btn {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 4;
+}
+
 /* =========================================================
    MAIN CONSOLE
    Left = report

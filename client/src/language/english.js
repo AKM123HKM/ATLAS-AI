@@ -42,6 +42,8 @@ const english = {
 
   // Phrases the wake-word listener matches against, lowercased.
   wakeWords: [
+    "namaste",
+    "namaste atlas",
     "hey atlas",
     "hello atlas",
     "hello",

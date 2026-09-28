@@ -81,6 +81,19 @@ const CATEGORY_ALIASES = {
   indian: "india",
 };
 
+const HINDI_CATEGORY_QUERIES = {
+  general: "आज की ताज़ा खबरें",
+  world: "दुनिया की ताज़ा खबरें",
+  india: "भारत की ताज़ा खबरें",
+  technology: "तकनीक की ताज़ा खबरें",
+  science: "विज्ञान की ताज़ा खबरें",
+  business: "व्यापार की ताज़ा खबरें",
+  sports: "खेल की ताज़ा खबरें",
+  entertainment: "मनोरंजन की ताज़ा खबरें",
+  health: "स्वास्थ्य की ताज़ा खबरें",
+  politics: "राजनीति की ताज़ा खबरें",
+};
+
 
 // ------------------------------------------------------------
 // WORDS THAT SHOULD NOT BECOME SEARCH TERMS
@@ -148,6 +161,20 @@ const STOP_WORDS = new Set([
   "latest",
 
   "news",
+  "khabar",
+  "khabrein",
+  "khabarein",
+  "khabren",
+  "khobor",
+  "taaza",
+  "taza",
+  "taaja",
+  "samachar",
+  "aaj",
+  "ki",
+  "batao",
+  "dikhao",
+  "dikhaiye",
 ]);
 
 
@@ -169,6 +196,14 @@ function normalize(text) {
 // ------------------------------------------------------------
 
 export function isNewsQuestion(input) {
+  const raw = String(input || "").toLowerCase();
+  if (
+    /(?:खबर|ख़बर|समाचार|सुर्खी|ताज़ा समाचार|ताजा समाचार|आज की खबर)/.test(raw) ||
+    /\b(?:khabar|khabrein|khabarein|khabren|khobor|samachar|taaza|taza|taaja|khabar batao|khabrein batao|aaj ki khabar|aaj ki news)\b/i.test(raw)
+  ) {
+    return true;
+  }
+
   const q = normalize(input);
 
   if (!q) {
@@ -194,9 +229,25 @@ export function isNewsQuestion(input) {
 // ------------------------------------------------------------
 
 export function parseNewsCommand(input) {
+  const rawInput = String(input || "").toLowerCase();
   const normalized = normalize(input);
 
   let category = "general";
+
+  const hindiCategories = [
+    [/भारत|इंडिया|हिंदुस्तान/, "india"],
+    [/दुनिया|अंतरराष्ट्रीय/, "world"],
+    [/तकनीक|टेक्नोलॉजी/, "technology"],
+    [/विज्ञान/, "science"],
+    [/व्यापार|बिज़नेस|कारोबार/, "business"],
+    [/खेल|क्रिकेट/, "sports"],
+    [/मनोरंजन|फिल्म|सिनेमा/, "entertainment"],
+    [/स्वास्थ्य|सेहत/, "health"],
+    [/राजनीति|चुनाव/, "politics"],
+  ];
+
+  const hindiCategory = hindiCategories.find(([pattern]) => pattern.test(rawInput));
+  if (hindiCategory) category = hindiCategory[1];
 
   // ----------------------------------------------------------
   // Detect explicit category
@@ -214,6 +265,7 @@ export function parseNewsCommand(input) {
       );
 
     if (
+      category === "general" &&
       regex.test(normalized)
     ) {
       category = canonical;
@@ -227,8 +279,9 @@ export function parseNewsCommand(input) {
   // ----------------------------------------------------------
 
   const wantsIndia =
-    /\b(india|indian|delhi|mumbai|bangalore|bengaluru|noida|gurgaon|gurugram)\b/
-      .test(normalized);
+    category === "india" ||
+    /\b(india|indian|delhi|mumbai|bangalore|bengaluru|noida|gurgaon|gurugram)\b/.test(normalized) ||
+    /भारत|इंडिया|हिंदुस्तान|दिल्ली|मुंबई|बेंगलुरु|नोएडा/.test(rawInput);
 
 
   if (
@@ -276,7 +329,7 @@ export function parseNewsCommand(input) {
       .filter(Boolean)
       .filter(
         (word) =>
-          !STOP_WORDS.has(word)
+      !STOP_WORDS.has(word)
       );
 
 
@@ -340,9 +393,11 @@ export async function fetchLatestNews(
   params.set(
     "country",
     options.country ||
-      parsed.country ||
+      (options.language === "hi" ? "in" : parsed.country) ||
       "us"
   );
+
+  params.set("language", options.language === "hi" ? "hi" : "en");
 
 
   // ----------------------------------------------------------
@@ -361,6 +416,11 @@ export async function fetchLatestNews(
     params.set(
       "q",
       customQuery.trim()
+    );
+  } else if (options.language === "hi") {
+    params.set(
+      "q",
+      HINDI_CATEGORY_QUERIES[options.category || parsed.category] || HINDI_CATEGORY_QUERIES.general
     );
   }
 
@@ -522,7 +582,8 @@ export async function fetchLatestNews(
 // ------------------------------------------------------------
 
 export function newsToSpeech(
-  data
+  data,
+  language = "en"
 ) {
   const articles =
     Array.isArray(
@@ -535,37 +596,18 @@ export function newsToSpeech(
   if (
     articles.length === 0
   ) {
-    return (
-      "I couldn't find any current headlines."
-    );
+    return language === "hi"
+      ? "मुझे अभी कोई ताज़ा खबर नहीं मिली।"
+      : "I couldn't find any current headlines.";
   }
 
 
-  // Speak only the first three headlines
-  // so A.T.L.A.S doesn't read ten articles aloud.
+  // Keep the spoken update short so users can interrupt or navigate away.
+  const headline = articles[0]?.title || "Untitled headline";
 
-  const first =
-    articles.slice(0, 3);
-
-
-  const headlines =
-    first
-      .map(
-        (
-          article,
-          index
-        ) =>
-          `${index + 1}. ${
-            article?.title ||
-            "Untitled headline"
-          }`
-      )
-      .join(". ");
-
-
-  return (
-    `Here are the latest headlines. ${headlines}`
-  );
+  return language === "hi"
+    ? `आज की ताज़ा सुर्खियाँ: ${headline}.`
+    : `Here are today's top headlines: ${headline}.`;
 }
 
 

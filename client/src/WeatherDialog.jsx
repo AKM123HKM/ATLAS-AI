@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import "./WeatherDialog.css";
 
-export default function WeatherDialog({ onClose, location = "", coords = null }) {
+export default function WeatherDialog({ onClose, location = "", coords = null, language = "en" }) {
+  const isHindi = language === "hi";
   const [city, setCity] = useState(location || "Greater Noida");
   const [activeCoords, setActiveCoords] = useState(coords);
   const [searchInput, setSearchInput] = useState("");
@@ -31,7 +32,7 @@ export default function WeatherDialog({ onClose, location = "", coords = null })
       let countryName = "";
       try {
         const geoRes = await fetch(
-          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
+          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=${isHindi ? "hi" : "en"}`
         );
         const geoData = await geoRes.json();
         placeName = geoData.city || geoData.locality || placeName;
@@ -61,12 +62,12 @@ export default function WeatherDialog({ onClose, location = "", coords = null })
       const geoRes = await fetch(
         `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
           targetCity
-        )}&count=1&language=en&format=json`
+        )}&count=1&language=${isHindi ? "hi" : "en"}&format=json`
       );
       const geoData = await geoRes.json();
 
       if (!geoData.results || geoData.results.length === 0) {
-        throw new Error("City not found");
+        throw new Error(isHindi ? "शहर नहीं मिला" : "City not found");
       }
 
       const { latitude, longitude, name, country } = geoData.results[0];
@@ -101,19 +102,19 @@ export default function WeatherDialog({ onClose, location = "", coords = null })
 
   const getWeatherInfo = (code) => {
     const codes = {
-      0: { label: "Clear Sky", icon: "☀️" },
-      1: { label: "Mainly Clear", icon: "🌤️" },
-      2: { label: "Partly Cloudy", icon: "⛅" },
-      3: { label: "Overcast", icon: "☁️" },
-      45: { label: "Foggy", icon: "🌫️" },
-      51: { label: "Light Drizzle", icon: "🌧️" },
-      61: { label: "Slight Rain", icon: "🌧️" },
-      63: { label: "Moderate Rain", icon: "🌧️" },
-      65: { label: "Heavy Rain", icon: "🌧️" },
-      80: { label: "Rain Showers", icon: "🌦️" },
-      95: { label: "Thunderstorm", icon: "⛈️" },
+      0: { label: isHindi ? "साफ़ आसमान" : "Clear Sky", icon: "☀️" },
+      1: { label: isHindi ? "मुख्यतः साफ़" : "Mainly Clear", icon: "🌤️" },
+      2: { label: isHindi ? "आंशिक बादल" : "Partly Cloudy", icon: "⛅" },
+      3: { label: isHindi ? "बादल छाए हुए" : "Overcast", icon: "☁️" },
+      45: { label: isHindi ? "कोहरा" : "Foggy", icon: "🌫️" },
+      51: { label: isHindi ? "हल्की बूंदाबांदी" : "Light Drizzle", icon: "🌧️" },
+      61: { label: isHindi ? "हल्की बारिश" : "Slight Rain", icon: "🌧️" },
+      63: { label: isHindi ? "मध्यम बारिश" : "Moderate Rain", icon: "🌧️" },
+      65: { label: isHindi ? "तेज़ बारिश" : "Heavy Rain", icon: "🌧️" },
+      80: { label: isHindi ? "बारिश की बौछारें" : "Rain Showers", icon: "🌦️" },
+      95: { label: isHindi ? "आंधी-तूफ़ान" : "Thunderstorm", icon: "⛈️" },
     };
-    return codes[code] || { label: "Cloudy", icon: "☁️" };
+    return codes[code] || { label: isHindi ? "बादल" : "Cloudy", icon: "☁️" };
   };
 
   return (
@@ -121,8 +122,8 @@ export default function WeatherDialog({ onClose, location = "", coords = null })
       <div className="weather-window">
         <div className="weather-header">
           <div>
-            <span className="weather-label">A.T.L.A.S CLIMATE CORE</span>
-            <h2>Atmospheric Data</h2>
+            <span className="weather-label">{isHindi ? "A.T.L.A.S मौसम केंद्र" : "A.T.L.A.S CLIMATE CORE"}</span>
+            <h2>{isHindi ? "मौसम की जानकारी" : "Atmospheric Data"}</h2>
           </div>
           <button className="weather-close" onClick={onClose}>
             ×
@@ -132,22 +133,22 @@ export default function WeatherDialog({ onClose, location = "", coords = null })
         <form className="weather-search" onSubmit={handleSearch}>
           <input
             type="text"
-            placeholder="Search location..."
+            placeholder={isHindi ? "शहर खोजें..." : "Search location..."}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
-          <button type="submit">SEARCH</button>
+          <button type="submit">{isHindi ? "खोजें" : "SEARCH"}</button>
         </form>
 
         <div className="weather-body">
           {loading ? (
             <div className="weather-loading">
               <div className="weather-spinner"></div>
-              <p>FETCHING ATMOSPHERIC DATA...</p>
+              <p>{isHindi ? "मौसम की जानकारी प्राप्त हो रही है..." : "FETCHING ATMOSPHERIC DATA..."}</p>
             </div>
           ) : error ? (
             <div className="weather-error">
-              <p>ERROR: {error}</p>
+              <p>{isHindi ? "त्रुटि" : "ERROR"}: {error}</p>
             </div>
           ) : (
             weatherData && (
@@ -172,7 +173,7 @@ export default function WeatherDialog({ onClose, location = "", coords = null })
                       {Math.round(weatherData.current.temperature_2m)}°C
                     </h1>
                     <span className="weather-feels">
-                      Feels like{" "}
+                      {isHindi ? "महसूस हो रहा है" : "Feels like"}{" "}
                       {Math.round(weatherData.current.apparent_temperature)}°C
                     </span>
                   </div>
@@ -180,19 +181,19 @@ export default function WeatherDialog({ onClose, location = "", coords = null })
 
                 <div className="weather-grid">
                   <div className="metric-card">
-                    <span className="metric-label">HUMIDITY</span>
+                    <span className="metric-label">{isHindi ? "नमी" : "HUMIDITY"}</span>
                     <span className="metric-value">
                       {weatherData.current.relative_humidity_2m}%
                     </span>
                   </div>
                   <div className="metric-card">
-                    <span className="metric-label">WIND SPEED</span>
+                    <span className="metric-label">{isHindi ? "हवा की गति" : "WIND SPEED"}</span>
                     <span className="metric-value">
                       {weatherData.current.wind_speed_10m} km/h
                     </span>
                   </div>
                   <div className="metric-card">
-                    <span className="metric-label">PRECIPITATION</span>
+                    <span className="metric-label">{isHindi ? "वर्षा" : "PRECIPITATION"}</span>
                     <span className="metric-value">
                       {weatherData.current.precipitation} mm
                     </span>
@@ -200,12 +201,12 @@ export default function WeatherDialog({ onClose, location = "", coords = null })
                 </div>
 
                 <div className="forecast-section">
-                  <div className="forecast-title">5-DAY FORECAST</div>
+                  <div className="forecast-title">{isHindi ? "5 दिन का पूर्वानुमान" : "5-DAY FORECAST"}</div>
                   <div className="forecast-list">
                     {weatherData.daily.time.slice(0, 5).map((date, idx) => (
                       <div key={date} className="forecast-item">
                         <span>
-                          {new Date(date).toLocaleDateString("en-US", {
+                          {new Date(date).toLocaleDateString(isHindi ? "hi-IN" : "en-US", {
                             weekday: "short",
                           })}
                         </span>
@@ -226,8 +227,8 @@ export default function WeatherDialog({ onClose, location = "", coords = null })
         </div>
 
         <div className="weather-footer">
-          <span>OPEN-METEO ENGINE</span>
-          <span>LIVE METRICS</span>
+          <span>{isHindi ? "Open-Meteo मौसम सेवा" : "OPEN-METEO ENGINE"}</span>
+          <span>{isHindi ? "ताज़ा जानकारी" : "LIVE METRICS"}</span>
         </div>
       </div>
     </div>
