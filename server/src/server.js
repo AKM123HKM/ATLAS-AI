@@ -496,6 +496,106 @@ app.get("/api/news", async (req, res) => {
 });
 
 // ============================================================
+// DICTIONARY LOOKUP
+// Definitions are fetched directly; Hindi mode translates the short result.
+// ============================================================
+
+async function translateDictionaryText(text, source, target) {
+  const params = new URLSearchParams({
+    q: String(text || "").slice(0, 450),
+    langpair: `${source}|${target}`,
+  });
+  const response = await fetch(
+    `https://api.mymemory.translated.net/get?${params.toString()}`,
+  );
+  if (!response.ok) return "";
+  const data = await response.json();
+  if (data.responseStatus && data.responseStatus !== 200) return "";
+  return String(data.responseData?.translatedText || "").trim();
+}
+
+app.get("/api/dictionary", async (req, res) => {
+  try {
+    const word = String(req.query.word || "").trim().slice(0, 80);
+    const language = req.query.language === "hi" ? "hi" : "en";
+    if (!word || !/^[\p{L}\p{M}\s'-]+$/u.test(word)) {
+      return res.status(400).json({ error: "Enter a word to define." });
+    }
+
+    let lookupWord = word;
+    if (/[\u0900-\u097F]/.test(word)) {
+      lookupWord = await translateDictionaryText(word, "hi", "en");
+      if (!lookupWord) {
+        return res.status(404).json({ error: "Could not find this word." });
+      }
+    }
+
+    const dictionaryResponse = await fetch(
+      `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(lookupWord)}`,
+    );
+    if (dictionaryResponse.status === 404) {
+      return res.status(404).json({ error: "Word not found." });
+    }
+    if (!dictionaryResponse.ok) {
+      return res.status(502).json({ error: "Dictionary service is temporarily unavailable." });
+    }
+
+    const entries = await dictionaryResponse.json();
+    const definitions = (Array.isArray(entries) ? entries : [])
+      .flatMap((entry) => (entry.meanings || []).flatMap((meaning) =>
+        (meaning.definitions || []).slice(0, 2).map((item) => ({
+          partOfSpeech: meaning.partOfSpeech || "meaning",
+          definition: item.definition || "",
+          example: item.example || "",
+        })),
+      ))
+      .filter((item) => item.definition)
+      .slice(0, 3);
+
+    if (!definitions.length) {
+      return res.status(404).json({ error: "No definition was found for this word." });
+    }
+
+    if (language === "hi") {
+      const translatedDefinitions = await Promise.all(
+        definitions.map(async (item) => ({
+          ...item,
+          definition: await translateDictionaryText(item.definition, "en", "hi"),
+          example: item.example
+            ? await translateDictionaryText(item.example, "en", "hi")
+            : "",
+        })),
+      );
+      if (translatedDefinitions.some((item) => !item.definition)) {
+        return res.status(502).json({ error: "Hindi translation is temporarily unavailable." });
+      }
+      definitions.splice(0, definitions.length, ...translatedDefinitions);
+    }
+
+    const answer = definitions
+      .map((item, index) => `${index + 1}. ${item.definition}${item.example ? ` उदाहरण: ${item.example}` : ""}`)
+      .join(" ");
+    const displayWord = word;
+    const result = {
+      title: displayWord,
+      answer,
+      paragraphs: definitions.map((item) => item.definition),
+      keyFacts: [],
+      relatedLinks: [],
+      imageQuery: "",
+      imageUrl: "",
+      modelUsed: "DICTIONARY API",
+      language,
+    };
+    res.set("Cache-Control", "public, max-age=86400");
+    return res.json(result);
+  } catch (error) {
+    console.error("DICTIONARY LOOKUP ERROR:", error);
+    return res.status(502).json({ error: "Dictionary lookup failed." });
+  }
+});
+
+// ============================================================
 // MUSIC SEARCH
 // YouTube Data API — key stays server-side
 // ============================================================

@@ -7,6 +7,7 @@ import WeatherDialog from "./WeatherDialog";
 import MathDialog from "./MathDialog";
 import NewsDialog from "./NewsDialog";
 import { isNewsQuestion } from "./newsEngine";
+import { parseDictionaryQuestion } from "./dictionaryEngine";
 import { solveMath, isMathQuestion } from "./mathEngine";
 import AtlasGlobe from "./AtlasGlobe";
 import LanguageToggle from "./components/LanguageToggle";
@@ -1124,6 +1125,73 @@ function App() {
           : "Opening local music library.",
       );
 
+      return;
+    }
+
+    const dictionaryWord = parseDictionaryQuestion(question);
+    if (dictionaryWord) {
+      setUserText(question);
+      setAiText("");
+      setResult(null);
+      setShowResults(false);
+      setStatus(getLanguagePack(languageRef.current).systemStatus.processing);
+      isProcessingRef.current = true;
+
+      const controller = new AbortController();
+      questionAbortRef.current = controller;
+      try {
+        const params = new URLSearchParams({
+          word: dictionaryWord,
+          language: languageRef.current,
+        });
+        const response = await fetch(
+          `https://atlas-ai-1wd9.onrender.com/api/dictionary?${params.toString()}`,
+          { signal: controller.signal },
+        );
+        if (
+          controller.signal.aborted ||
+          questionGeneration !== questionGenerationRef.current
+        ) return;
+
+        if (!response.ok) {
+          throw new Error("Dictionary entry unavailable");
+        }
+
+        const data = await response.json();
+        if (
+          controller.signal.aborted ||
+          questionGeneration !== questionGenerationRef.current
+        ) return;
+
+        questionAbortRef.current = null;
+        setAiText(data.answer || "");
+        setResult(data);
+        setShowResults(true);
+        setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
+        speak(data.answer || "", languageRef.current);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.warn("ATLAS DICTIONARY LOOKUP:", error);
+        questionAbortRef.current = null;
+        const message = languageRef.current === "hi"
+          ? `“${dictionaryWord}” का अर्थ अभी नहीं मिल पाया।`
+          : `I couldn't find a dictionary meaning for “${dictionaryWord}”.`;
+        const failure = {
+          title: dictionaryWord,
+          answer: message,
+          paragraphs: [message],
+          keyFacts: [],
+          relatedLinks: [],
+          imageQuery: "",
+          imageUrl: "",
+          modelUsed: "DICTIONARY LOOKUP",
+        };
+        setAiText(message);
+        setResult(failure);
+        setShowResults(true);
+        setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
+        speak(message, languageRef.current);
+      }
       return;
     }
 
