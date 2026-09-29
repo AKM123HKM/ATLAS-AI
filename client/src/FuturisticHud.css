@@ -593,13 +593,18 @@
   display: flex;
   align-items: center;
 
-  gap: 10px;
+  gap: 14px;
 
-  padding: 7px 14px;
+  min-height: 54px;
+  box-sizing: border-box;
+  padding: 12px 24px;
 
-  background: rgba(2, 12, 20, 0.72);
+  background: rgba(1, 12, 19, 0.96);
 
-  border: 1px solid rgba(77, 232, 255, 0.22);
+  border: 1px solid rgba(77, 232, 255, 0.62);
+  box-shadow:
+    0 0 24px rgba(0, 210, 240, 0.18),
+    inset 0 0 18px rgba(0, 210, 240, 0.10);
 
   clip-path: polygon(
     7px 0,
@@ -614,25 +619,68 @@
 
   color: var(--atlas-cyan);
 
-  font-size: 9px;
-  font-weight: 700;
+  font-size: clamp(13px, 1vw, 16px);
+  font-weight: 800;
 
-  letter-spacing: 0.2em;
+  letter-spacing: 0.16em;
 
   text-transform: uppercase;
 
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(4px);
 
   text-shadow:
-    0 0 10px rgba(77, 232, 255, 0.3);
+    0 0 12px rgba(77, 232, 255, 0.48);
+}
+
+.voice-status.is-thinking {
+  border-color: rgba(77, 232, 255, 0.88);
+  box-shadow:
+    0 0 30px rgba(0, 210, 240, 0.28),
+    inset 0 0 22px rgba(0, 210, 240, 0.16);
+}
+
+.thinking-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 2px;
+}
+
+.thinking-indicator i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  animation: thinkingDot 1s ease-in-out infinite;
+}
+
+.thinking-indicator i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.thinking-indicator i:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes thinkingDot {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0) scale(0.75); }
+  30% { opacity: 1; transform: translateY(-3px) scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-indicator i {
+    animation: none;
+    opacity: 0.8;
+  }
 }
 
 
 .voice-status::before {
   content: "";
 
-  width: 5px;
-  height: 5px;
+  width: 8px;
+  height: 8px;
 
   flex-shrink: 0;
 
@@ -1359,9 +1407,15 @@ footer::before {
   .voice-status {
     top: calc(50% + 160px);
 
-    font-size: 8px;
-
-    letter-spacing: 0.15em;
+    width: max-content;
+    max-width: calc(100% - 24px);
+    min-height: 48px;
+    padding: 10px 16px;
+    white-space: normal;
+    justify-content: center;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.1em;
   }
 
 
@@ -1638,6 +1692,80 @@ footer::before {
 
 .center .mic-button {
   z-index: 30;
+}
+
+/* Keep the listening state centered. Show the recognized phrase in its own
+   compact row directly above it, clear of the speak control. */
+.dashboard-center > .voice-status {
+  left: 50%;
+  top: calc(50% + 24px);
+  transform: translate(-50%, -50%);
+  width: max-content;
+  max-width: calc(100% - 32px);
+  white-space: normal;
+  justify-content: center;
+  text-align: center;
+}
+
+.dashboard-center > .user-subtitle {
+  left: 50%;
+  top: auto;
+  bottom: 98px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  box-sizing: border-box;
+  margin: 0;
+  padding: 7px 14px;
+  transform: translateX(-50%);
+  text-align: center;
+  color: rgba(224, 251, 255, 0.96);
+  background: rgba(1, 12, 19, 0.96);
+  border: 1px solid rgba(77, 232, 255, 0.5);
+  box-shadow: 0 0 18px rgba(0, 210, 240, 0.12);
+  overflow-wrap: anywhere;
+}
+
+.dashboard-center > .user-subtitle .subtitle-label {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.dashboard-center > .user-subtitle .recognized-question-text {
+  min-width: 0;
+}
+
+.dashboard-center > .user-subtitle .recognized-question-actions {
+  flex: 0 0 auto;
+  justify-content: center;
+  margin: 0;
+  pointer-events: auto;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-center > .voice-status {
+    left: 50%;
+    top: calc(50% + 24px);
+    transform: translate(-50%, -50%);
+    max-width: calc(100% - 24px);
+  }
+
+  .dashboard-center > .user-subtitle {
+    left: 50%;
+    top: auto;
+    bottom: 98px;
+    width: max-content;
+    max-width: calc(100% - 24px);
+    transform: translateX(-50%);
+    text-align: center;
+  }
+
+  .dashboard-center > .user-subtitle .recognized-question-actions {
+    justify-content: center;
+  }
 }
 
 
@@ -2071,8 +2199,8 @@ footer::before {
 }
 
 .presence-camera-heading .status-dot {
-  width: 5px;
-  height: 5px;
+  width: 9px;
+  height: 9px;
 }
 
 .presence-camera-frame {

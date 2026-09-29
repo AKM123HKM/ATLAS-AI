@@ -78,9 +78,12 @@ export default function NewsDialog({
   language = "en",
   onClose,
   onSpeak,
+  onNewsLoaded,
 }) {
   const onSpeakRef = useRef(onSpeak);
   onSpeakRef.current = onSpeak;
+  const onNewsLoadedRef = useRef(onNewsLoaded);
+  onNewsLoadedRef.current = onNewsLoaded;
 
   const [data, setData] =
     useState(null);
@@ -109,10 +112,11 @@ export default function NewsDialog({
           const result =
             await fetchLatestNews(
               query,
-              { limit: 10, language }
+              { language }
             );
 
           setData(result);
+          onNewsLoadedRef.current?.(result);
 
           if (
             !isRefresh &&

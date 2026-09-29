@@ -15,13 +15,15 @@
 }
 
 .weather-window {
-  width: 480px;
-  background: rgba(10, 20, 32, 0.95);
-  border: 1px solid rgba(0, 240, 255, 0.3);
-  border-radius: 12px;
-  padding: 20px;
+  width: min(620px, calc(100vw - 36px));
+  max-height: min(88vh, 820px);
+  overflow: auto;
+  background: linear-gradient(150deg, rgba(7, 24, 37, 0.99), rgba(2, 10, 18, 0.99));
+  border: 1px solid rgba(0, 240, 255, 0.42);
+  border-radius: 16px;
+  padding: 24px;
   color: #e0f7fc;
-  box-shadow: 0 0 30px rgba(0, 240, 255, 0.15);
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.55), 0 0 36px rgba(0, 240, 255, 0.14);
   font-family: 'Inter', system-ui, sans-serif;
 }
 
@@ -134,9 +136,32 @@
 
 .weather-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 16px;
+}
+
+.weather-insight {
+  margin: 0 0 14px;
+  padding: 12px 15px;
+  border: 1px solid rgba(0, 240, 255, 0.22);
+  border-left: 3px solid #00eaff;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(0, 220, 255, 0.09), rgba(0, 220, 255, 0.025));
+}
+
+.weather-insight-label {
+  color: #46edff;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.weather-insight p {
+  margin: 5px 0 0;
+  color: #e2f8fc;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .metric-card {
@@ -192,6 +217,12 @@
   border-bottom: none;
 }
 
+.forecast-rain {
+  min-width: 62px;
+  color: #6feaff;
+  text-align: right;
+}
+
 .weather-footer {
   display: flex;
   justify-content: space-between;
@@ -219,4 +250,34 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+@media (max-width: 560px) {
+  .weather-window {
+    width: calc(100vw - 24px);
+    max-height: 92vh;
+    padding: 18px;
+  }
+
+  .weather-hero {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .weather-hero h3 {
+    font-size: 0.95rem;
+  }
+
+  .weather-temp {
+    font-size: 1.8rem;
+  }
+
+  .weather-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .forecast-item {
+    gap: 8px;
+    font-size: 0.75rem;
+  }
 }

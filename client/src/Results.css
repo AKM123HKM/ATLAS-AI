@@ -224,6 +224,62 @@
   content: "VOICE CONTROL / ENGLISH + HINDI";
 }
 
+.results-content.knowledge-content {
+  border-color: rgba(30, 215, 240, 0.32);
+  background:
+    radial-gradient(ellipse at 8% 0%, rgba(32, 217, 242, 0.11), transparent 55%),
+    linear-gradient(135deg, rgba(6, 27, 34, 0.76), rgba(2, 12, 17, 0.70));
+  box-shadow: inset 0 0 55px rgba(0, 205, 230, 0.045), 0 14px 40px rgba(0, 0, 0, 0.12);
+}
+
+.results-content.knowledge-content::before {
+  content: "LOCAL KNOWLEDGE / INSTANT RESPONSE";
+}
+
+.results-content.knowledge-content p {
+  max-width: 900px;
+  color: #e5fbff;
+  font-size: clamp(20px, 1.7vw, 28px);
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: -0.2px;
+  text-wrap: pretty;
+}
+
+.knowledge-points {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  max-width: 1000px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: knowledge-point;
+}
+
+.knowledge-points li {
+  position: relative;
+  min-height: 58px;
+  padding: 15px 18px 15px 58px;
+  border: 1px solid rgba(32, 217, 242, 0.20);
+  background: linear-gradient(105deg, rgba(12, 54, 64, 0.55), rgba(3, 18, 24, 0.48));
+  color: rgba(229, 251, 255, 0.96);
+  font-size: clamp(16px, 1.3vw, 21px);
+  line-height: 1.55;
+  counter-increment: knowledge-point;
+}
+
+.knowledge-points li::before {
+  content: counter(knowledge-point, decimal-leading-zero);
+  position: absolute;
+  left: 17px;
+  top: 17px;
+  color: #20d9f2;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
 .feature-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -208,6 +208,21 @@ export function clean(input) {
   text = text
     .toLowerCase()
     .replace(/[?]/g, "")
+    .replace(/\u00d7/g, "*")
+    .replace(/\u00f7/g, "/")
+    .replace(/\u2212/g, "-")
+    .replace(/\u00b2/g, "^2")
+    .replace(/\u00b3/g, "^3")
+    .replace(/\u221a/g, "sqrt")
+    .replace(/\u20b9/g, "")
+    .replace(/\u00a3|\u20ac/g, "")
+    .replace(/×/g, "*")
+    .replace(/÷/g, "/")
+    .replace(/−/g, "-")
+    .replace(/²/g, "^2")
+    .replace(/³/g, "^3")
+    .replace(/₹/g, "")
+    .replace(/,(?=\d)/g, "")
     .replace(/×/g, "*")
     .replace(/÷/g, "/")
     .replace(/−/g, "-")
@@ -369,6 +384,11 @@ export function clean(input) {
   );
 
   text = text.replace(
+    /\bsqrt(-?\d+(?:\.\d+)?)\b/g,
+    "sqrt($1)"
+  );
+
+  text = text.replace(
     /\bcube\s+root\s+of\s+(-?\d+(?:\.\d+)?)\b/g,
     "cbrt($1)"
   );
@@ -387,6 +407,11 @@ export function clean(input) {
     .replace(/\bx\s+square\b/g, "x^2")
     .replace(/\bx\s+cubed\b/g, "x^3")
     .replace(/\bx\s+cube\b/g, "x^3");
+
+  text = text.replace(
+    /(-?\d+(?:\.\d+)?)\s+ka\s+cube\b/g,
+    "($1)^3"
+  );
 
   text = text
     .replace(
@@ -422,6 +447,7 @@ export function clean(input) {
 
   text = text
     .replace(/\bmultiplied\s+by\b/g, "*")
+    .replace(/\binto\b/g, "*")
     .replace(/\btimes\b/g, "*")
     .replace(/\bdivided\s+by\b/g, "/")
     .replace(/\bdivided\b/g, "/")
@@ -483,6 +509,7 @@ export function clean(input) {
 
   text = text
     .replace(/\s+/g, " ")
+    .replace(/(?<=\d)\.(?=$)/g, "")
     .trim();
 
   console.log("MATH CLEAN INPUT:", text);
@@ -2198,6 +2225,208 @@ function solveVector(input) {
 // GEOMETRY
 // ============================================================
 
+function solveCommonWordProblem(input) {
+  const geometrySource = normalizeHindiNumerals(input).toLowerCase();
+  const text = geometrySource
+    .replace(/[\u20b9\u00a3\u20ac]/g, "")
+    .replace(/(\d),(?=\d{3}\b)/g, "$1")
+    .replace(/[₹$£€,]/g, "")
+    .replace(/\brs\.?\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (/quadratic formula/.test(text)) {
+    return {
+      type: "formula",
+      title: "QUADRATIC FORMULA",
+      expression: input,
+      result: "x = (-b ± √(b² - 4ac)) / 2a",
+      steps: [
+        "For ax² + bx + c = 0, identify a, b, and c.",
+        "Find the discriminant: D = b² - 4ac.",
+        "Substitute into x = (-b ± √D) / 2a.",
+      ],
+    };
+  }
+
+  let match = text.match(
+    /(\d+(?:\.\d+)?)\s*(?:rupees?\s*)?(?:ka\s*)?(\d+(?:\.\d+)?)\s*%\s*gst/,
+  );
+  if (match) {
+    const price = Number(match[1]);
+    const rate = Number(match[2]);
+    const gst = price * rate / 100;
+    const total = price + gst;
+    return {
+      type: "percentage",
+      title: "GST CALCULATION",
+      expression: input,
+      result: `GST = ${fmt(gst)}; total = ${fmt(total)}`,
+      numericResult: gst,
+      steps: [
+        `Price = ${fmt(price)}`,
+        `GST = ${fmt(rate)}% of ${fmt(price)} = ${fmt(gst)}`,
+        `Total including GST = ${fmt(price)} + ${fmt(gst)} = ${fmt(total)}`,
+      ],
+    };
+  }
+
+  match = text.match(
+    /(\d+(?:\.\d+)?)\s*(?:rupees?\s*)?.*?(\d+(?:\.\d+)?)\s*%\s*discount/,
+  );
+  if (match && /(?:final price|discount|item|cost|price)/.test(text)) {
+    const price = Number(match[1]);
+    const rate = Number(match[2]);
+    const discount = price * rate / 100;
+    const finalPrice = price - discount;
+    return {
+      type: "percentage",
+      title: "DISCOUNTED PRICE",
+      expression: input,
+      result: fmt(finalPrice),
+      numericResult: finalPrice,
+      steps: [
+        `Original price = ${fmt(price)}`,
+        `Discount = ${fmt(rate)}% of ${fmt(price)} = ${fmt(discount)}`,
+        `Final price = ${fmt(price)} - ${fmt(discount)} = ${fmt(finalPrice)}`,
+      ],
+    };
+  }
+
+  match = text.match(
+    /costs?\s+(\d+(?:\.\d+)?).*?(?:increases?|increased|goes up|rises?)\s+by\s+(\d+(?:\.\d+)?)\s*%/,
+  );
+  if (match) {
+    const price = Number(match[1]);
+    const rate = Number(match[2]);
+    const increase = price * rate / 100;
+    const total = price + increase;
+    return {
+      type: "percentage",
+      title: "PERCENTAGE INCREASE",
+      expression: input,
+      result: fmt(total),
+      numericResult: total,
+      steps: [
+        `Original price = ${fmt(price)}`,
+        `Increase = ${fmt(rate)}% of ${fmt(price)} = ${fmt(increase)}`,
+        `New price = ${fmt(price)} + ${fmt(increase)} = ${fmt(total)}`,
+      ],
+    };
+  }
+
+  match = text.match(
+    /(?:i have|ive got|i have got)\s+(\d+(?:\.\d+)?).*?spent\s+(\d+(?:\.\d+)?).*?(?:then|and)\s+(\d+(?:\.\d+)?)/,
+  );
+  if (match) {
+    const [starting, first, second] = match.slice(1).map(Number);
+    const remaining = starting - first - second;
+    return {
+      type: "calculation",
+      title: "REMAINING BALANCE",
+      expression: input,
+      result: fmt(remaining),
+      numericResult: remaining,
+      steps: [
+        `Starting amount = ${fmt(starting)}`,
+        `Amount spent = ${fmt(first)} + ${fmt(second)} = ${fmt(first + second)}`,
+        `Remaining = ${fmt(starting)} - ${fmt(first)} - ${fmt(second)} = ${fmt(remaining)}`,
+      ],
+    };
+  }
+
+  match = text.match(
+    /(\d+(?:\.\d+)?)\s*(?:km\/h|kph|kilometres? per hour|kilometers? per hour).*?(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)/,
+  );
+  if (match) {
+    const speed = Number(match[1]);
+    const time = Number(match[2]);
+    const distance = speed * time;
+    return {
+      type: "calculation",
+      title: "TRAVEL DISTANCE",
+      expression: input,
+      result: `${fmt(distance)} km`,
+      numericResult: distance,
+      steps: [
+        `Speed = ${fmt(speed)} km/h`,
+        `Time = ${fmt(time)} hours`,
+        `Distance = speed × time = ${fmt(speed)} × ${fmt(time)} = ${fmt(distance)} km`,
+      ],
+    };
+  }
+
+  match = geometrySource.match(
+    /distance between (?:two )?points?\s*\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?\s*(?:and|to)\s*\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?/,
+  );
+  if (match) {
+    const [, x1Text, y1Text, x2Text, y2Text] = match;
+    const x1 = Number(x1Text);
+    const y1 = Number(y1Text);
+    const x2 = Number(x2Text);
+    const y2 = Number(y2Text);
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const distance = Math.hypot(dx, dy);
+    return {
+      type: "geometry",
+      title: "DISTANCE BETWEEN POINTS",
+      expression: input,
+      result: fmt(distance),
+      numericResult: distance,
+      steps: [
+        `Points = (${fmt(x1)}, ${fmt(y1)}) and (${fmt(x2)}, ${fmt(y2)})`,
+        `Distance = √[(${fmt(x2)} - ${fmt(x1)})² + (${fmt(y2)} - ${fmt(y1)})²]`,
+        `Distance = √(${fmt(dx * dx)} + ${fmt(dy * dy)}) = ${fmt(distance)}`,
+      ],
+    };
+  }
+
+  if (/probability/.test(text) && /coin/.test(text) && /heads?/.test(text)) {
+    return {
+      type: "probability",
+      title: "COIN TOSS PROBABILITY",
+      expression: input,
+      result: "1/2 (50%)",
+      numericResult: 0.5,
+      steps: [
+        "A fair coin has 2 equally likely outcomes: heads or tails.",
+        "Favourable outcomes = 1 (heads). Total outcomes = 2.",
+        "Probability = favourable outcomes / total outcomes = 1/2 = 50%.",
+      ],
+    };
+  }
+
+  match = text.match(
+    /sin\s*(?:theta|θ)\s*(?:is|equals?|=)?\s*(-?\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?).*?cos\s*(?:theta|θ)?/,
+  );
+  if (!match) {
+    match = text.replace(/\u03b8/g, "theta").match(
+      /sin\s*theta\s*(?:is|equals?|=)?\s*(-?\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?).*?cos\s*theta?/,
+    );
+  }
+  if (match) {
+    const sine = Number(match[1]) / Number(match[2]);
+    if (Math.abs(sine) > 1) return null;
+    const cosineMagnitude = Math.sqrt(1 - sine * sine);
+    const cosine = fmt(cosineMagnitude);
+    return {
+      type: "trigonometry",
+      title: "TRIGONOMETRIC RATIO",
+      expression: input,
+      result: `±${cosine} (acute angle: ${cosine})`,
+      numericResult: cosineMagnitude,
+      steps: [
+        `sin θ = ${fmt(sine)}`,
+        `Using sin²θ + cos²θ = 1, cos²θ = 1 - (${fmt(sine)})² = ${fmt(cosineMagnitude * cosineMagnitude)}.`,
+        `cos θ = ±${cosine}; if θ is acute, cos θ = ${cosine}.`,
+      ],
+    };
+  }
+
+  return null;
+}
+
 function solveGeometry(input) {
   // FIX: normalize Hindi digits before lowercase/parse.
   const text =
@@ -2606,10 +2835,23 @@ export function isMathQuestion(input) {
   // in this function AND ensures solveMath() gets a chance to
   // run its own solvers (which are independently normalized too).
   const raw = normalizeHindiNumerals(String(input ?? ""));
-  const text = raw.toLowerCase().trim();
+  const text = clean(raw).toLowerCase().trim();
 
   if (!text) {
     return false;
+  }
+
+  if (
+    /quadratic formula/.test(text) ||
+    (/probability/.test(text) && /coin/.test(text)) ||
+    (/distance/.test(text) && /points?/.test(text)) ||
+    (/\b(spent|spend)\b/.test(text) && /\b(left|remaining)\b/.test(text)) ||
+    (/(?:km\/h|kph|kilometres? per hour|kilometers? per hour)/.test(text) && /\btime|hours?\b/.test(text)) ||
+    (/\b(?:gst|discount)\b/.test(text) && /%/.test(text)) ||
+    (/\bincreases?\b/.test(text) && /%/.test(text)) ||
+    (/sin\s*(?:theta|θ)/.test(text) && /cos\s*(?:theta|θ)/.test(text))
+  ) {
+    return true;
   }
 
   // ==========================================================
@@ -2617,7 +2859,8 @@ export function isMathQuestion(input) {
   // ==========================================================
 
   if (
-    /\d+\s*[\+\-\*\/\^=]\s*\d+/.test(text)
+    /\d+\s*[\+\-\*\/\^=]\s*\d+/.test(text) ||
+    /[\d)]\s*[\+\-\*\/\^=]\s*[\d(]/.test(text)
   ) {
     return true;
   }
@@ -2837,6 +3080,37 @@ export function solveMath(input) {
   );
 
   try {
+    const wordProblem = solveCommonWordProblem(original);
+    if (wordProblem) {
+      if (wordProblem.title === "QUADRATIC FORMULA") {
+        wordProblem.result = "x = (-b +/- sqrt(b^2 - 4ac)) / (2a)";
+        wordProblem.steps = [
+          "For ax^2 + bx + c = 0, identify a, b, and c.",
+          "Find the discriminant: D = b^2 - 4ac.",
+          "Substitute into x = (-b +/- sqrt(D)) / (2a).",
+        ];
+      }
+      if (wordProblem.type === "trigonometry") {
+        const cosine = fmt(wordProblem.numericResult);
+        wordProblem.result = `+/-${cosine} (acute angle: ${cosine})`;
+        wordProblem.steps = [
+          "sin(theta)^2 + cos(theta)^2 = 1.",
+          `cos(theta) = +/-${cosine}; if theta is acute, cos(theta) = ${cosine}.`,
+        ];
+      }
+      if (wordProblem.title === "DISTANCE BETWEEN POINTS") {
+        wordProblem.steps = [
+          "Distance formula: sqrt((x2 - x1)^2 + (y2 - y1)^2).",
+          ...wordProblem.steps.slice(0, 1),
+          `Distance = ${wordProblem.result}.`,
+        ];
+      }
+      if (wordProblem.title === "TRAVEL DISTANCE") {
+        wordProblem.steps[2] = wordProblem.steps[2].replace(/×/g, "times");
+      }
+      return wordProblem;
+    }
+
     // --------------------------------------------------------
     // 1. EQUATIONS
     // --------------------------------------------------------
@@ -2853,6 +3127,27 @@ export function solveMath(input) {
         );
 
       if (equation) {
+        if (equation.title === "QUADRATIC EQUATION" && equation.solutions?.length) {
+          const coefficients = String(equation.steps?.[0] || "").match(
+            /a\s*=\s*(-?\d+(?:\.\d+)?),\s*b\s*=\s*(-?\d+(?:\.\d+)?),\s*c\s*=\s*(-?\d+(?:\.\d+)?)/,
+          );
+          const roots = equation.solutions;
+          equation.result = roots.length > 1
+            ? `x1 = ${fmt(roots[0])}, x2 = ${fmt(roots[1])}`
+            : `x = ${fmt(roots[0])}`;
+          if (coefficients) {
+            const [, aText, bText, cText] = coefficients;
+            const a = Number(aText);
+            const b = Number(bText);
+            const c = Number(cText);
+            const discriminant = b * b - 4 * a * c;
+            equation.steps = [
+              `a = ${fmt(a)}, b = ${fmt(b)}, c = ${fmt(c)}`,
+              `Discriminant D = b^2 - 4ac = ${fmt(discriminant)}`,
+              ...roots.map((root, index) => `x${index + 1} = ${fmt(root)}`),
+            ];
+          }
+        }
         return equation;
       }
 
@@ -2984,6 +3279,16 @@ export function solveMath(input) {
       solveGeometry(original);
 
     if (geometry) {
+      if (geometry.title === "CIRCLE AREA") {
+        const radius = original.match(/radius\s+(-?\d+(?:\.\d+)?)/i)?.[1];
+        if (radius !== undefined) {
+          geometry.steps = [
+            `Radius = ${fmt(Number(radius))}`,
+            `Area = pi * ${fmt(Number(radius))}^2`,
+            `Area = ${geometry.result}`,
+          ];
+        }
+      }
       return geometry;
     }
 
@@ -3048,41 +3353,28 @@ export function mathResultToSpeech(result) {
     return "I could not solve that locally.";
   }
 
-  if (
-    result.type === "equation"
-  ) {
-    if (
-      result.solutions &&
-      result.solutions.length > 0
-    ) {
-      if (
-        typeof result.solutions[0] ===
-        "number"
-      ) {
-        return `The solution is ${result.solutions
-          .map(
-            value =>
-              `x equals ${fmt(value)}`
-          )
-          .join(" and ")}.`;
-      }
-
-      return `The solutions are ${result.result}.`;
+  let conclusion = "The mathematical calculation is complete.";
+  if (result.type === "equation" && result.solutions?.length) {
+    if (typeof result.solutions[0] === "number") {
+      conclusion = `The solution is ${result.solutions
+        .map((value) => `x equals ${fmt(value)}`)
+        .join(" and ")}.`;
+    } else {
+      conclusion = `The solutions are ${result.result}.`;
     }
-
-    return result.result
-      ? String(result.result)
-      : "There is no real solution.";
+  } else if (result.result !== undefined && result.result !== null) {
+    conclusion = result.type === "formula"
+      ? `The formula is ${result.result}.`
+      : `The answer is ${result.result}.`;
   }
 
-  if (
-    result.result !== undefined &&
-    result.result !== null
-  ) {
-    return `The answer is ${result.result}.`;
-  }
+  const explanation = (result.steps || [])
+    .filter((step) => !/^(?:result|answer)\s*=|^=/i.test(String(step).trim()))
+    .slice(0, 3)
+    .map((step) => String(step).trim().replace(/[.!?]+$/g, ""))
+    .filter(Boolean);
 
-  return "The mathematical calculation is complete.";
+  return [...explanation, conclusion].join(". ");
 }
 
 // ============================================================

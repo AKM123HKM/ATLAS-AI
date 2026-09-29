@@ -35,9 +35,26 @@ async function translateText(text, source, target, signal) {
   return String(data.responseData?.translatedText || "").trim();
 }
 
-export async function lookupFastDictionary(word, language, signal) {
+export async function lookupFastDictionary(word, language, signal, intent = "meaning", secondWord = "") {
+  if (intent === "synonym" || intent === "antonym") {
+    const relation = intent === "synonym" ? "rel_syn" : "rel_ant";
+    const params = new URLSearchParams({ [relation]: word, max: "8" });
+    const response = await fetch(`https://api.datamuse.com/words?${params.toString()}`, { signal });
+    if (!response.ok) return null;
+    const matches = await response.json();
+    let terms = matches.map((item) => item.word).filter(Boolean).slice(0, 6);
+    if (!terms.length) return null;
+    if (language === "hi") {
+      terms = await Promise.all(terms.map((term) => translateText(term, "en", "hi", signal)));
+      terms = terms.filter(Boolean);
+    }
+    const label = intent === "synonym" ? "Synonyms" : "Antonyms";
+    const answer = `${label} of “${word}”: ${terms.join(", ")}.`;
+    return { title: word, answer, paragraphs: [answer], keyFacts: [], relatedLinks: [], imageQuery: "", imageUrl: "", modelUsed: "FAST DICTIONARY API", language };
+  }
+
   const cacheKey = `${CACHE_PREFIX}${language}:${word.toLocaleLowerCase()}`;
-  const cached = readCachedResult(cacheKey);
+  const cached = intent === "meaning" ? readCachedResult(cacheKey) : null;
   if (cached) return cached;
 
   let lookupWord = word;
@@ -71,10 +88,27 @@ export async function lookupFastDictionary(word, language, signal) {
     if (finalDefinitions.some((definition) => !definition)) return null;
   }
 
+  let answer = finalDefinitions.map((definition, index) => `${index + 1}. ${definition}`).join(" ");
+  if (intent === "example") {
+    let sentence = `${word} can make a meaningful difference.`;
+    if (language === "hi") sentence = await translateText(sentence, "en", "hi", signal);
+    answer = language === "hi" ? `उदाहरण: ${sentence}` : `Example: ${sentence}`;
+  } else if (intent === "difference") {
+    const secondParams = new URLSearchParams({ sp: secondWord, md: "d", max: "5" });
+    const secondResponse = await fetch(`https://api.datamuse.com/words?${secondParams.toString()}`, { signal });
+    if (!secondResponse.ok) return null;
+    const secondMatches = await secondResponse.json();
+    const secondEntry = secondMatches.find((item) => item.word?.toLowerCase() === secondWord.toLowerCase());
+    const secondDefinitions = (secondEntry?.defs || []).map((entry) => entry.replace(/^[a-z]+\t/i, "").trim()).filter(Boolean).slice(0, 1);
+    if (!secondDefinitions.length) return null;
+    let secondMeaning = secondDefinitions[0];
+    if (language === "hi") secondMeaning = await translateText(secondMeaning, "en", "hi", signal);
+    answer = `${word}: ${finalDefinitions[0]} ${secondWord}: ${secondMeaning}.`;
+  }
   const result = {
     title: word,
-    answer: finalDefinitions.map((definition, index) => `${index + 1}. ${definition}`).join(" "),
-    paragraphs: finalDefinitions,
+    answer,
+    paragraphs: [answer],
     keyFacts: [],
     relatedLinks: [],
     imageQuery: "",
@@ -82,6 +116,6 @@ export async function lookupFastDictionary(word, language, signal) {
     modelUsed: "FAST DICTIONARY API",
     language,
   };
-  saveCachedResult(cacheKey, result);
+  if (intent === "meaning") saveCachedResult(cacheKey, result);
   return result;
 }

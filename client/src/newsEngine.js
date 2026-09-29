@@ -45,6 +45,8 @@ const NORMALIZED_API_BASE =
 
 const NEWS_ENDPOINT =
   `${NORMALIZED_API_BASE}/api/news`;
+const NEWS_FOLLOW_UP_ENDPOINT =
+  `${NORMALIZED_API_BASE}/api/news/follow-up`;
 
 
 // ------------------------------------------------------------
@@ -79,6 +81,11 @@ const CATEGORY_ALIASES = {
 
   india: "india",
   indian: "india",
+  ai: "technology",
+  space: "science",
+  nasa: "science",
+  spacex: "science",
+  isro: "science",
 };
 
 const HINDI_CATEGORY_QUERIES = {
@@ -157,6 +164,9 @@ const STOP_WORDS = new Set([
   "some",
   "top",
   "stories",
+  "new",
+  "development",
+  "developments",
 
   "latest",
 
@@ -185,6 +195,7 @@ const STOP_WORDS = new Set([
 function normalize(text) {
   return String(text || "")
     .toLowerCase()
+    .replace(/[’']/g, "")
     .replace(/[^a-z0-9\s'-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -219,7 +230,9 @@ export function isNewsQuestion(input) {
     /\bcurrent\b/.test(q) ||
     /\btoday\b/.test(q) ||
     /\bupdates?\b/.test(q) ||
-    /\bhappening now\b/.test(q)
+    /\bhappening now\b/.test(q) ||
+    /\b(?:what(?:s| is) happening in india|what(?:s| is) happening with (?:nasa|spacex|isro)|developments? in ai|top \d+ .+ stories)\b/.test(q) ||
+    /\b(?:technology|tech|science|sports|space|ai|isro|nasa|spacex|india) (?:news|stories|developments?)\b/.test(q)
   );
 }
 
@@ -233,6 +246,8 @@ export function parseNewsCommand(input) {
   const normalized = normalize(input);
 
   let category = "general";
+  const topCount = normalized.match(/\btop\s+(\d+)\b/);
+  const limit = topCount ? Math.min(Math.max(Number(topCount[1]) || 3, 1), 10) : 10;
 
   const hindiCategories = [
     [/भारत|इंडिया|हिंदुस्तान/, "india"],
@@ -329,7 +344,7 @@ export function parseNewsCommand(input) {
       .filter(Boolean)
       .filter(
         (word) =>
-      !STOP_WORDS.has(word)
+      !STOP_WORDS.has(word) && !/^\d+$/.test(word)
       );
 
 
@@ -354,6 +369,7 @@ export function parseNewsCommand(input) {
     category,
     query,
     country,
+    limit,
   };
 }
 
@@ -432,7 +448,7 @@ export async function fetchLatestNews(
   params.set(
     "limit",
     String(
-      options.limit || 10
+      options.limit || parsed.limit || 10
     )
   );
 
@@ -574,6 +590,18 @@ export async function fetchLatestNews(
     endpoint:
       NEWS_ENDPOINT,
   };
+}
+
+export async function fetchNewsFollowUp(question, article, language = "en", signal) {
+  const response = await fetch(NEWS_FOLLOW_UP_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    signal,
+    body: JSON.stringify({ question, article, language }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || `News follow-up returned HTTP ${response.status}.`);
+  return data;
 }
 
 

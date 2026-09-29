@@ -11,13 +11,13 @@ const hindi = {
 
   systemStatus: {
     init: "सिस्टम शुरू हो रहा है",
-    waitingWake: "वेक वर्ड का इंतज़ार",
+    waitingWake: "नमस्ते बोलिये",
     wakeDetected: "वेक वर्ड मिल गया",
     listening: "सुन रहा हूँ",
     noQuestion: "कोई सवाल नहीं मिला",
     voiceError: "आवाज़ में गड़बड़ी",
     micDenied: "माइक्रोफ़ोन की अनुमति नहीं मिली",
-    processing: "प्रोसेस हो रहा है",
+    processing: "सवाल समझ रहा हूँ",
     speaking: "बोल रहा हूँ",
     weatherSystem: "मौसम सिस्टम",
     musicSystem: "संगीत सिस्टम",

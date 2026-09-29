@@ -6,15 +6,18 @@ import MusicPlayer from "./MusicPlayer";
 import WeatherDialog from "./WeatherDialog";
 import MathDialog from "./MathDialog";
 import NewsDialog from "./NewsDialog";
-import { isNewsQuestion } from "./newsEngine";
+import { fetchNewsFollowUp, isNewsQuestion } from "./newsEngine";
 import { parseDictionaryQuestion } from "./dictionaryEngine";
 import { lookupFastDictionary } from "./fastDictionary";
+import { getAtlasKnowledgeResult } from "./atlasKnowledge";
 import { usePersonPresence } from "./usePersonPresence";
 import {
   getAtlasFeaturesResult,
   isAtlasFeaturesQuestion,
 } from "./featuresAnswer";
-import { solveMath, isMathQuestion } from "./mathEngine";
+import { solveMath, isMathQuestion, mathResultToSpeech } from "./mathEngine";
+import { isWeatherCommand as matchesWeatherTerms, parseWeatherQuestion } from "./weatherEngine";
+import { parseMusicRequest } from "./musicEngine";
 import AtlasGlobe from "./AtlasGlobe";
 import LanguageToggle from "./components/LanguageToggle";
 import {
@@ -202,7 +205,7 @@ function isHindiMusicCommand(value) {
 
 function isWeatherCommand(value) {
   const phrase = String(value || "").toLowerCase();
-  return /\b(?:weather|climate|temperature|forecast|mausam|taapmaan|tapman|barish)\b/i.test(phrase) ||
+  return matchesWeatherTerms(phrase) ||
     /(?:मौसम|तापमान|बारिश|वर्षा|मौसम कैसा)/.test(phrase);
 }
 
@@ -215,15 +218,6 @@ function detectLanguagePreference(value) {
   return wantsHindi ? "hi" : "en";
 }
 
-function extractWeatherLocation(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/\b(?:weather|climate|temperature|forecast|mausam|taapmaan|tapman|barish|today|tomorrow|now|right now|aaj|abhi|ka|ki|ke|mein|me|par|batao|bataiye|dikhao|dikhaiye|please|what|is|the|for|in|at|of|kya|kaisa|kaisi|hai|hoga|hogi|rahega|rahegi)\b/gi, " ")
-    .replace(/(?:आज|अभी|का|की|के|में|मे|पर|बताओ|बताइए|दिखाओ|दिखाइए|क्या|कैसा|कैसी|है|होगा|होगी|रहेगा|रहेगी|मौसम|तापमान|बारिश|वर्षा|कितना|कितनी)/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 // =========================================================
 // APP
 // =========================================================
@@ -231,6 +225,7 @@ function extractWeatherLocation(value) {
 function App() {
   const [showMusic, setShowMusic] = useState(false);
   const [songToPlay, setSongToPlay] = useState(null);
+  const [musicPrompt, setMusicPrompt] = useState("");
 
   // =========================================================
   // LANGUAGE STATE — "en" or "hi". This is the single source of
@@ -281,6 +276,11 @@ function App() {
   const [mathResult, setMathResult] = useState(null);
   const [weatherLocation, setWeatherLocation] = useState("Greater Noida");
   const [weatherCoords, setWeatherCoords] = useState(null);
+  const [weatherQuery, setWeatherQuery] = useState({
+    day: "today",
+    timeOfDay: "all-day",
+    intent: "overview",
+  });
 
   const [booted, setBooted] = useState(false);
   const [presenceArmed, setPresenceArmed] = useState(false);
@@ -309,6 +309,10 @@ function App() {
   const questionAbortRef = useRef(null);
   const questionGenerationRef = useRef(0);
   const lastMusicCommandRef = useRef({ command: "", time: 0 });
+  const lastWeatherContextRef = useRef(null);
+  const latestNewsContextRef = useRef({ articles: [], query: "", fetchedAt: "" });
+  const activeNewsArticleIndexRef = useRef(0);
+  const musicClarificationRef = useRef(false);
   const wakeRestartTimerRef = useRef(null);
   const wakeSessionIdRef = useRef(0);
 
@@ -384,7 +388,7 @@ function App() {
     }
 
     isProcessingRef.current = false;
-    setStatus("WAITING FOR WAKE WORD");
+    setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
     setTimeout(() => startWakeWordDetection(), 300);
     return true;
   };
@@ -423,7 +427,7 @@ function App() {
     setUserText("");
 
     isProcessingRef.current = false;
-    setStatus("WAITING FOR WAKE WORD");
+    setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
     setTimeout(() => startWakeWordDetection(), 300);
   };
 
@@ -630,48 +634,38 @@ function App() {
   // =========================================================
 
   const handleMusicCommand = (question) => {
-    const q = question.toLowerCase().trim();
-    const hindiMusicCommand = isHindiMusicCommand(q);
-
-    if (!q.includes("play") && !hindiMusicCommand) {
-      return false;
-    }
-
-    const command = hindiMusicCommand
-      ? q
-          .replace(/(?:गाना|गाने|गीत|संगीत|म्यूजिक|बजाओ|बजाइए|चलाओ|चलाइए|सुनाओ|सुनाइए|लगाओ|चला दो|कोई|एक|अच्छा|अच्छी|प्लीज़|कृपया)/g, " ")
-          .replace(/\b(?:gaana|gana|geet|music|bajao|chalao|sunao|lagao|play|song|please|koi|ek|accha|achha|good|some)\b/gi, " ")
-          .replace(/\s+/g, " ")
-          .trim()
-      : q
-          .replace(/\bplay\b/g, "")
-          .replace(/\bsong\b/g, "")
-          .replace(/\bmusic\b/g, "")
-          .replace(/\bthe\b/g, "")
-          .trim();
-
-    console.log("ATLAS MUSIC REQUEST:", command);
-
-    const genericFillers = ["", "a", "a song", "some", "something", "anything", "best", "song"];
-
-    const cleanedCommand =
-      genericFillers.includes(command) ||
-      (hindiMusicCommand && /^(?:बढ़िया|पसंदीदा|कोई भी|अच्छा सा|accha sa|best song)$/i.test(command))
-        ? null
-        : command;
+    const request = parseMusicRequest(question, languageRef.current);
+    if (!request) return false;
 
     const pack = getLanguagePack(languageRef.current);
-
     isProcessingRef.current = true;
-
-    setSongToPlay(cleanedCommand);
     setShowMusic(true);
+    musicClarificationRef.current = false;
 
-    setStatus(
-      cleanedCommand
-        ? pack.systemStatus.searchingMusic + ": " + cleanedCommand.toUpperCase()
-        : pack.systemStatus.musicSystem,
-    );
+    if (request.type === "clarify") {
+      const prompt = languageRef.current === "hi"
+        ? "Aap kaunsa gaana sunna chahenge?"
+        : "Which song would you like me to play?";
+      musicControlsRef.current?.clear?.();
+      setSongToPlay(null);
+      setMusicPrompt(prompt);
+      setStatus(prompt.toUpperCase());
+      speak(prompt, languageRef.current, () => {
+        musicClarificationRef.current = true;
+      });
+      return true;
+    }
+
+    setMusicPrompt("");
+    if (request.type === "open") {
+      setSongToPlay(null);
+      setStatus(pack.systemStatus.musicSystem);
+      return true;
+    }
+
+    console.log("ATLAS MUSIC SEARCH:", request.query);
+    setSongToPlay(request.query);
+    setStatus(pack.systemStatus.searchingMusic + ": " + request.query.toUpperCase());
 
     return true;
   };
@@ -685,6 +679,8 @@ function App() {
 
     console.log("ATLAS: LIVE NEWS CORE → DIRECT NEWS RELAY");
 
+    latestNewsContextRef.current = { articles: [], query: question, fetchedAt: "" };
+    activeNewsArticleIndexRef.current = 0;
     setNewsQuery(question);
     setUserText(question);
     setAiText("");
@@ -729,7 +725,7 @@ function App() {
       setStatus(pack.systemStatus.mathActive);
       isProcessingRef.current = true;
 
-      const spoken =
+      const oldSpoken =
         result.type === "equation" && result.solutions
           ? result.solutions.length
             ? pack.math.solutionIs(
@@ -741,7 +737,8 @@ function App() {
           : result.result
             ? pack.math.answerIs(result.result)
             : pack.math.analysisComplete;
-      setTimeout(() => speak(spoken, "en"), 80);
+      const spoken = mathResultToSpeech(result) || oldSpoken;
+      setTimeout(() => speak(spoken, "en", null, true), 80);
 
       return true;
     } catch (error) {
@@ -856,7 +853,12 @@ function App() {
   // SPEECH
   // =========================================================
 
-  const speak = (text, outputLanguage = languageRef.current, onComplete = null) => {
+  const speak = (
+    text,
+    outputLanguage = languageRef.current,
+    onComplete = null,
+    readAllSentences = false,
+  ) => {
     if (!text || !text.trim()) {
       isProcessingRef.current = false;
 
@@ -879,14 +881,20 @@ function App() {
     const speechLang = getSpeechLang(outputLanguage);
     const voice = pickVoiceForLanguage(outputLanguage);
 
-    const cleanText = text.replace(/\n+/g, ". ").replace(/\s+/g, " ").trim();
+    const cleanText = text
+      .replace(/\n+/g, ". ")
+      .replace(/(\d)\.(\d)/g, "$1<DECIMAL>$2")
+      .replace(/\s+/g, " ")
+      .trim();
 
     const allSentences = cleanText.match(/[^.!?।]+[.!?।]+/g) || [cleanText];
 
     // Keep spoken answers brief. The complete answer remains visible on the
     // Results page; voice playback only reads the first two sentences.
-    const MAX_SPOKEN_SENTENCES = 2;
-    const sentences = allSentences.slice(0, MAX_SPOKEN_SENTENCES);
+    const MAX_SPOKEN_SENTENCES = readAllSentences ? 6 : 2;
+    const sentences = allSentences
+      .slice(0, MAX_SPOKEN_SENTENCES)
+      .map((sentence) => sentence.replace(/<DECIMAL>/g, "."));
 
     const chunks = [];
 
@@ -1012,6 +1020,94 @@ function App() {
   // PROCESS QUESTION
   // =========================================================
 
+  const handleNewsFollowUp = async (question) => {
+    const context = latestNewsContextRef.current;
+    const fetchedTime = Date.parse(context?.fetchedAt || "");
+    if (!context?.articles?.length || (Number.isFinite(fetchedTime) && Date.now() - fetchedTime > 30 * 60 * 1000)) return false;
+
+    const phrase = String(question || "").toLowerCase().trim();
+    if (!/(?:\bexplain\b|\bwhy\b|\bimportant\b|\b(?:who|what person) (?:is|was) involved\b|\bwhen did (?:this|that|it) happen\b|\bsource\b|\bfirst one\b|\bsecond one\b|\bthird one\b|\bnumber (?:one|two|three)\b|\bthat story\b|\bthis story\b)/i.test(phrase)) {
+      return false;
+    }
+
+    const ordinal = phrase.match(/\b(first|1st|one|second|2nd|two|third|3rd|three)\b/);
+    if (ordinal) {
+      const ordinalIndexes = { first: 0, "1st": 0, one: 0, second: 1, "2nd": 1, two: 1, third: 2, "3rd": 2, three: 2 };
+      activeNewsArticleIndexRef.current = ordinalIndexes[ordinal[1]] ?? 0;
+    }
+
+    const article = context.articles[activeNewsArticleIndexRef.current] || context.articles[0];
+    const index = context.articles.indexOf(article);
+    const isHindi = languageRef.current === "hi";
+    const wantsSource = /\bsource\b|where did this come from|show me the link/i.test(phrase);
+    const wantsWhen = /\bwhen\b|what date|what time/i.test(phrase);
+    let answer = "";
+
+    if (wantsSource) {
+      answer = article.url
+        ? isHindi
+          ? `${article.source ? `यह खबर ${article.source} से है। ` : ""}मूल स्रोत का लिंक स्क्रीन पर दिखाया है।`
+          : `${article.source ? `This article is from ${article.source}. ` : ""}I’ve displayed the original source link on screen.`
+        : isHindi
+          ? `“${article.title}” के लिए स्रोत लिंक उपलब्ध नहीं है।`
+          : `The source link is not available for “${article.title}”.`;
+    } else if (wantsWhen) {
+      answer = article.publishedAt
+        ? isHindi
+          ? `यह लेख ${new Date(article.publishedAt).toLocaleString("hi-IN", { dateStyle: "long", timeStyle: "short" })} को प्रकाशित हुआ था। घटना का समय इससे अलग हो सकता है।`
+          : `This article was published ${new Date(article.publishedAt).toLocaleString("en-IN", { dateStyle: "long", timeStyle: "short" })}. That may differ from when the event itself happened.`
+        : isHindi
+          ? "इस लेख में प्रकाशित होने की तारीख नहीं दी गई है, इसलिए मैं इसकी पुष्टि नहीं कर सकता।"
+          : "The article does not include a publication date, so I can’t confirm when it was published.";
+    } else {
+      setStatus(getLanguagePack(languageRef.current).systemStatus.processing);
+      isProcessingRef.current = true;
+      try {
+        const data = await fetchNewsFollowUp(
+          question,
+          {
+            title: article.title,
+            description: article.description,
+            source: article.source,
+            publishedAt: article.publishedAt,
+            url: article.url,
+          },
+          languageRef.current,
+        );
+        answer = data.answer || "I couldn’t get a grounded explanation from this article.";
+      } catch (error) {
+        console.warn("ATLAS NEWS FOLLOW-UP:", error);
+        answer = article.description
+          ? `The article says: ${article.description}`
+          : `I don’t have enough detail in this headline to explain it reliably: ${article.title}`;
+      }
+    }
+
+    const relatedLinks = article.url
+      ? [{ title: article.source || "Original news source", url: article.url, description: article.title }]
+      : [];
+    const result = {
+      title: article.title,
+      answer,
+      paragraphs: [answer],
+      keyFacts: [`Story ${index + 1} of ${context.articles.length}`, ...(article.source ? [`Source: ${article.source}`] : [])],
+      relatedLinks,
+      imageQuery: "",
+      imageUrl: article.image || "",
+      modelUsed: wantsSource || wantsWhen ? "LIVE NEWS CONTEXT" : "GROUNDED NEWS ASSISTANT",
+    };
+
+    setUserText(question);
+    setAiText(answer);
+    setResult(result);
+    setShowNews(false);
+    setShowResults(true);
+    setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
+    isProcessingRef.current = true;
+    speak(answer, languageRef.current);
+    return true;
+  };
+
   const processQuestion = async (question) => {
     if (!question.trim()) return;
 
@@ -1035,6 +1131,64 @@ function App() {
 
     logInteraction(question);
 
+    if (await handleNewsFollowUp(question)) return;
+
+    const recentWeather = lastWeatherContextRef.current;
+    const weatherContextIsFresh = recentWeather && Date.now() - recentWeather.updatedAt < 10 * 60 * 1000;
+    const unresolvedWeatherPlace = /\bweather\s+(?:there|in that place)\b|\b(?:there|that place)'s weather\b/i.test(lowerQuestion);
+    let clarification = "";
+    if (/\bcapital of (?:a )?banana\b/i.test(lowerQuestion)) {
+      clarification = "A banana is not a place with a capital city. Did you mean to ask about a country or city?";
+    } else if (/\bwhat(?:'s| is) the colou?r of (?:the )?number \d+\b/i.test(lowerQuestion)) {
+      clarification = "Numbers do not have a color by themselves. Are you asking about a colored digit, a number in an image, or a visual pattern?";
+    } else if (/\b(?:potato|chair)\b/i.test(lowerQuestion) && /\b(?:calculate|divide|divided|multiply|times|plus|minus)\b/i.test(lowerQuestion)) {
+      clarification = "I can calculate expressions with numbers, but “potato” and “chair” are not numeric values. Which numbers should I use?";
+    } else if (unresolvedWeatherPlace && !weatherContextIsFresh) {
+      clarification = "Which city or location should I check the weather for?";
+    } else if (/^(?:search it|search that|look it up|find it)[?.!]*$/i.test(lowerQuestion)) {
+      clarification = "What would you like me to search for? Please tell me the topic or item.";
+    } else if (/^(?:what does it mean|what does that mean|what is it|what is that)[?.!]*$/i.test(lowerQuestion)) {
+      clarification = "Which word or thing are you asking about? Tell me the word or name and I’ll explain it.";
+    } else if (/^(?:tell me about him|tell me about her|tell me about them|who is he|who is she)[?.!]*$/i.test(lowerQuestion)) {
+      clarification = "Who do you mean? Please share the person’s name or a little more context.";
+    } else if (/\bweather\b/i.test(lowerQuestion) && /\b(?:without|don't|do not|no) (?:(?:use|using) )?(?:the )?internet\b/i.test(lowerQuestion)) {
+      clarification = "A live forecast needs an online weather service. I won’t make up forecast data; I can check it if you want me to use the weather service.";
+    }
+
+    if (clarification) {
+      questionAbortRef.current?.abort();
+      questionAbortRef.current = null;
+      const clarificationResult = {
+        title: "A quick clarification",
+        answer: clarification,
+        paragraphs: [clarification],
+        keyFacts: [], relatedLinks: [], imageQuery: "", imageUrl: "",
+        modelUsed: "ATLAS CLARIFICATION",
+      };
+      setUserText(question);
+      setAiText(clarification);
+      setResult(clarificationResult);
+      setShowResults(true);
+      setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
+      isProcessingRef.current = true;
+      speak(clarification, languageRef.current);
+      return;
+    }
+
+    const knowledgeResult = getAtlasKnowledgeResult(question);
+    if (knowledgeResult) {
+      questionAbortRef.current?.abort();
+      questionAbortRef.current = null;
+      setUserText(question);
+      setAiText(knowledgeResult.answer);
+      setResult(knowledgeResult);
+      setShowResults(true);
+      setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
+      isProcessingRef.current = true;
+      speak(knowledgeResult.answer, "en");
+      return;
+    }
+
     if (isAtlasFeaturesQuestion(question)) {
       questionAbortRef.current?.abort();
       questionAbortRef.current = null;
@@ -1057,15 +1211,26 @@ function App() {
       return;
     }
 
-    if (isWeatherCommand(question)) {
+    const weatherFollowUp = weatherContextIsFresh && /^(?:tomorrow|today|kal|aaj|in\s+.+|at\s+.+|for\s+.+)[?.!]*$/i.test(lowerQuestion);
+    if (isWeatherCommand(question) || weatherFollowUp) {
       console.log("ATLAS: WEATHER COMMAND");
-
-      const englishLocationMatch = lowerQuestion.match(
-        /(?:weather|climate|temperature|forecast)\s+(?:in|for|at|of)\s+([a-zA-Z\s]+?)(?:\s+today|\s+tomorrow|\s+right now|\s+now)?$/i,
-      );
-      const location = languageRef.current === "hi"
-        ? extractWeatherLocation(question)
-        : englishLocationMatch?.[1]?.trim() || "";
+      const parsedWeather = parseWeatherQuestion(question);
+      const onlyDayFollowUp = weatherFollowUp && /^(?:tomorrow|today|kal|aaj)[?.!]*$/i.test(lowerQuestion);
+      const onlyLocationFollowUp = weatherFollowUp && /^(?:in|at|for)\s+.+[?.!]*$/i.test(lowerQuestion);
+      const weatherRequest = weatherFollowUp
+        ? {
+            ...recentWeather.request,
+            day: onlyLocationFollowUp ? recentWeather.request.day : parsedWeather.day,
+            timeOfDay: recentWeather.request.timeOfDay,
+            intent: recentWeather.request.intent,
+            location: onlyDayFollowUp
+              ? recentWeather.request.location
+              : parsedWeather.location || recentWeather.request.location,
+          }
+        : parsedWeather;
+      const location = weatherRequest.location;
+      lastWeatherContextRef.current = { request: weatherRequest, updatedAt: Date.now() };
+      setWeatherQuery(weatherRequest);
 
       setUserText(question);
 
@@ -1152,8 +1317,9 @@ function App() {
       return;
     }
 
-    const dictionaryWord = parseDictionaryQuestion(question);
-    if (dictionaryWord) {
+    const dictionaryRequest = parseDictionaryQuestion(question);
+    if (dictionaryRequest) {
+      const { word: dictionaryWord, intent: dictionaryIntent, secondWord } = dictionaryRequest;
       setUserText(question);
       setAiText("");
       setResult(null);
@@ -1171,6 +1337,8 @@ function App() {
             dictionaryWord,
             selectedLanguage,
             controller.signal,
+            dictionaryIntent,
+            secondWord,
           );
         } catch (fastLookupError) {
           if (controller.signal.aborted) return;
@@ -1194,6 +1362,8 @@ function App() {
         const params = new URLSearchParams({
           word: dictionaryWord,
           language: selectedLanguage,
+          intent: dictionaryIntent,
+          ...(secondWord ? { secondWord } : {}),
         });
         const response = await fetch(
           `https://atlas-ai-1wd9.onrender.com/api/dictionary?${params.toString()}`,
@@ -1469,9 +1639,34 @@ function App() {
 
     recognition.lang = getSpeechLang(languageRef.current);
 
-    recognition.continuous = false;
+    // Keep the microphone session open across short pauses. Browsers do not
+    // expose a silence-duration setting for SpeechRecognition, so we use the
+    // continuous mode and submit only after a longer quiet window.
+    recognition.continuous = true;
 
-    recognition.interimResults = false;
+    recognition.interimResults = true;
+
+    let latestTranscript = "";
+    let submitTimer = null;
+    let questionSubmitted = false;
+
+    const submitQuestion = () => {
+      if (questionSubmitted) return;
+      const transcript = latestTranscript.trim();
+      if (!transcript) return;
+
+      questionSubmitted = true;
+      if (submitTimer) clearTimeout(submitTimer);
+      submitTimer = null;
+      setListening(false);
+      isProcessingRef.current = true;
+      try {
+        recognition.stop();
+      } catch (error) {
+        console.log("Question recognition stop:", error);
+      }
+      processQuestion(transcript);
+    };
 
     recognition.onstart = () => {
       setListening(true);
@@ -1488,15 +1683,32 @@ function App() {
     };
 
     recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
+      const parts = [];
+      for (let i = 0; i < event.results.length; i++) {
+        parts.push(event.results[i][0].transcript);
+      }
+      latestTranscript = parts.join(" ").replace(/\s+/g, " ").trim();
+      if (!latestTranscript) return;
 
-      console.log("Question:", transcript);
+      console.log("Question in progress:", latestTranscript);
 
-      setListening(false);
+      // These curated answers need no extra silence debounce once the browser
+      // has finalized the full recognized phrase. Other questions keep the
+      // longer pause window so users can finish their thought.
+      let allResultsFinal = event.results.length > 0;
+      for (let i = 0; i < event.results.length; i++) {
+        if (!event.results[i].isFinal) {
+          allResultsFinal = false;
+          break;
+        }
+      }
+      if (allResultsFinal && getAtlasKnowledgeResult(latestTranscript)) {
+        submitQuestion();
+        return;
+      }
 
-      isProcessingRef.current = true;
-
-      processQuestion(transcript);
+      if (submitTimer) clearTimeout(submitTimer);
+      submitTimer = setTimeout(submitQuestion, 3000);
     };
 
     recognition.onerror = (event) => {
@@ -1505,6 +1717,14 @@ function App() {
       setListening(false);
 
       recognitionRef.current = null;
+
+      if (latestTranscript.trim()) {
+        if (submitTimer) clearTimeout(submitTimer);
+        submitTimer = setTimeout(submitQuestion, 3000);
+        return;
+      }
+
+      if (submitTimer) clearTimeout(submitTimer);
 
       const pack = getLanguagePack(languageRef.current);
 
@@ -1522,9 +1742,17 @@ function App() {
     };
 
     recognition.onend = () => {
-      setListening(false);
-
-      recognitionRef.current = null;
+      // A browser may close a continuous recognition session on its own.
+      // Keep any recognized words and let the quiet-window timer submit them.
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+      }
+      if (!questionSubmitted && latestTranscript.trim()) {
+        if (submitTimer) clearTimeout(submitTimer);
+        submitTimer = setTimeout(submitQuestion, 3000);
+      } else if (!questionSubmitted) {
+        setListening(false);
+      }
     };
 
     recognitionRef.current = recognition;
@@ -1580,7 +1808,7 @@ function App() {
         setListening(true);
       };
 
-      recognition.onresult = (event) => {
+      recognition.onresult = async (event) => {
         for (let i = event.resultIndex; i < event.results.length; i += 1) {
           const result = event.results[i];
           for (let alternativeIndex = 0; alternativeIndex < result.length; alternativeIndex += 1) {
@@ -1629,6 +1857,12 @@ function App() {
               } else {
                 handleBackRef.current();
               }
+              return;
+            }
+
+            const selectedNewsTitle = latestNewsContextRef.current.articles?.[activeNewsArticleIndexRef.current]?.title;
+            const newsResultIsOpen = showResultsRef.current && result?.title === selectedNewsTitle;
+            if (result.isFinal && (showNewsRef.current || newsResultIsOpen) && await handleNewsFollowUp(commandPhrase)) {
               return;
             }
 
@@ -1700,6 +1934,24 @@ function App() {
                 runMusicCommand("unmute", controls.unmute);
                 return;
               }
+
+              if (result.isFinal && controls.search) {
+                const musicRequest = parseMusicRequest(command, languageRef.current, true);
+                const followUpQuery = musicRequest?.type === "search"
+                  ? musicRequest.query
+                  : musicClarificationRef.current
+                    ? command
+                    : "";
+                if (followUpQuery.trim()) {
+                  musicClarificationRef.current = false;
+                  setMusicPrompt("");
+                  controls.search(followUpQuery);
+                  setStatus(
+                    `${getLanguagePack(languageRef.current).systemStatus.searchingMusic}: ${followUpQuery.toUpperCase()}`,
+                  );
+                  return;
+                }
+              }
             }
           }
         }
@@ -1761,7 +2013,7 @@ function App() {
         // Recognition may already have stopped as the dialog closed.
       }
     };
-  }, [showMusic, showWeather, showMath, showNews, showResults]);
+  }, [showMusic, showWeather, showMath, showNews, showResults, result?.title]);
 
   // =========================================================
   // AUTOMATIC BOOT
@@ -1826,7 +2078,9 @@ function App() {
     let retryScheduled = false;
     recognition.lang = locale;
     recognition.continuous = false;
-    recognition.interimResults = false;
+    // Accept the language keyword as soon as it appears in interim speech;
+    // waiting for a finalized utterance makes this simple choice feel slow.
+    recognition.interimResults = true;
     preferenceRecognitionRef.current = recognition;
 
     const retry = () => {
@@ -1846,7 +2100,10 @@ function App() {
       setStatus("SAY ENGLISH OR HINDI");
     };
     recognition.onresult = (event) => {
-      const transcript = event.results?.[0]?.[0]?.transcript || "";
+      const transcript = Array.from(event.results || [])
+        .map((result) => result?.[0]?.transcript || "")
+        .join(" ")
+        .trim();
       console.log("ATLAS LANGUAGE PREFERENCE HEARD:", transcript);
       const choice = detectLanguagePreference(transcript);
       if (choice) {
@@ -2057,14 +2314,17 @@ function App() {
         <MusicPlayer
           controlsRef={musicControlsRef}
           songToPlay={songToPlay}
+          clarificationPrompt={musicPrompt}
           onClose={() => {
             setShowMusic(false);
 
             setSongToPlay(null);
+            setMusicPrompt("");
+            musicClarificationRef.current = false;
 
             isProcessingRef.current = false;
 
-            setStatus("WAITING FOR WAKE WORD");
+            setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
 
             setTimeout(() => {
               startWakeWordDetection();
@@ -2078,12 +2338,17 @@ function App() {
           location={weatherLocation}
           coords={weatherCoords}
           language={language}
+          query={weatherQuery}
+          onWeatherReady={(summary) => {
+            setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
+            speak(summary, languageRef.current);
+          }}
           onClose={() => {
             setShowWeather(false);
 
             isProcessingRef.current = false;
 
-            setStatus("WAITING FOR WAKE WORD");
+            setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
 
             setTimeout(() => {
               startWakeWordDetection();
@@ -2100,7 +2365,7 @@ function App() {
             setShowMath(false);
             setMathResult(null);
             isProcessingRef.current = false;
-            setStatus("WAITING FOR WAKE WORD");
+            setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
             setTimeout(() => {
               startWakeWordDetection();
             }, 300);
@@ -2112,6 +2377,14 @@ function App() {
         <NewsDialog
           query={newsQuery}
           language={language}
+          onNewsLoaded={(data) => {
+            latestNewsContextRef.current = {
+              articles: data?.articles || [],
+              query: data?.query || newsQuery,
+              fetchedAt: data?.fetchedAt || "",
+            };
+            activeNewsArticleIndexRef.current = 0;
+          }}
           onSpeak={(text) => {
             setAiText(text);
             speak(text, languageRef.current);
@@ -2125,7 +2398,7 @@ function App() {
             speechIndexRef.current = 0;
             setSpeaking(false);
             isProcessingRef.current = false;
-            setStatus("WAITING FOR WAKE WORD");
+            setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
             setTimeout(() => {
               startWakeWordDetection();
             }, 80);
@@ -2158,7 +2431,11 @@ function App() {
 
           <main className="results-page">
             <div className="results-header">
-              <div className="results-label">INTELLIGENCE REPORT</div>
+              <div className="results-label">
+                {result.modelUsed === "ATLAS KNOWLEDGE CORE"
+                  ? "ATLAS QUICK KNOWLEDGE"
+                  : "INTELLIGENCE REPORT"}
+              </div>
 
               <h1>{result.title || "ATLAS Intelligence Report"}</h1>
 
@@ -2185,12 +2462,18 @@ function App() {
                 )}
 
                 <div
-                  className={`results-content${result.featureList ? " features-content" : ""}`}
+                  className={`results-content${result.featureList ? " features-content" : ""}${result.modelUsed === "ATLAS KNOWLEDGE CORE" ? " knowledge-content" : ""}`}
                 >
                   {result.featureList?.length ? (
                     <ul className="feature-list">
                       {result.featureList.map((feature, index) => (
                         <li key={index}>{feature}</li>
+                      ))}
+                    </ul>
+                  ) : result.knowledgePoints?.length ? (
+                    <ul className="knowledge-points">
+                      {result.knowledgePoints.map((point, index) => (
+                        <li key={index}>{point}</li>
                       ))}
                     </ul>
                   ) : (
@@ -2201,6 +2484,7 @@ function App() {
 
                   {result.answer &&
                     !result.featureList?.length &&
+                    !result.knowledgePoints?.length &&
                     (!result.paragraphs || result.paragraphs.length === 0) && (
                       <p>{result.answer}</p>
                     )}
@@ -2223,8 +2507,9 @@ function App() {
                   <div className="side-line"></div>
 
                   <p>
-                    A.T.L.A.S has generated an expanded knowledge report based
-                    on your query.
+                    {result.modelUsed === "ATLAS KNOWLEDGE CORE"
+                      ? "Answered instantly from Atlas’s built-in knowledge."
+                      : "A.T.L.A.S has generated an expanded knowledge report based on your query."}
                   </p>
                 </div>
 
@@ -2460,9 +2745,25 @@ function App() {
             </aside>
 
             <section className="dashboard-center">
-              <AtlasGlobe listening={listening} speaking={speaking} />
+              <AtlasGlobe
+                listening={listening}
+                speaking={speaking}
+                thinking={
+                  status === lang.systemStatus.processing ||
+                  status === lang.systemStatus.weatherSystem ||
+                  status === lang.systemStatus.searchingMusic
+                }
+                answerReady={showResults && Boolean(result)}
+              />
 
-              <div className="voice-status">{status}</div>
+              <div className={`voice-status${status === lang.systemStatus.processing ? " is-thinking" : ""}`}>
+                <span className="voice-status-label">{status}</span>
+                {status === lang.systemStatus.processing && (
+                  <span className="thinking-indicator" aria-hidden="true">
+                    <i /><i /><i />
+                  </span>
+                )}
+              </div>
 
               {userText && (
                 <div className="user-subtitle">

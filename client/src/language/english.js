@@ -12,13 +12,13 @@ const english = {
 
   systemStatus: {
     init: "SYSTEM INITIALIZING",
-    waitingWake: "WAITING FOR WAKE WORD",
+    waitingWake: "WAITING FOR HELLO",
     wakeDetected: "WAKE WORD DETECTED",
     listening: "LISTENING",
     noQuestion: "NO QUESTION DETECTED",
     voiceError: "VOICE ERROR",
     micDenied: "MICROPHONE ACCESS DENIED",
-    processing: "PROCESSING",
+    processing: "ANALYZING QUESTION",
     speaking: "SPEAKING",
     weatherSystem: "WEATHER SYSTEM",
     musicSystem: "MUSIC SYSTEM",

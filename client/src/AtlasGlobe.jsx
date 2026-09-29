@@ -6,18 +6,24 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 export default function AtlasGlobe({
   listening = false,
   speaking = false,
+  thinking = false,
+  answerReady = false,
 }) {
   const containerRef = useRef(null);
 
   const voiceStateRef = useRef({
     listening,
     speaking,
+    thinking,
+    answerReady,
   });
 
   useEffect(() => {
     voiceStateRef.current.listening = listening;
     voiceStateRef.current.speaking = speaking;
-  }, [listening, speaking]);
+    voiceStateRef.current.thinking = thinking;
+    voiceStateRef.current.answerReady = answerReady;
+  }, [listening, speaking, thinking, answerReady]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -795,133 +801,8 @@ export default function AtlasGlobe({
     );
 
     // =========================================================
-    // SCAN SWEEP
-    // =========================================================
-
-    const scanGeometry =
-      new THREE.TorusGeometry(
-        0.895,
-        0.006,
-        8,
-        96,
-        Math.PI * 0.34
-      );
-
-    const scanMaterial =
-      new THREE.MeshBasicMaterial({
-        color: 0x72f4ff,
-        transparent: true,
-        opacity: 0.55,
-        blending:
-          THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-
-    const scanSweep =
-      new THREE.Mesh(
-        scanGeometry,
-        scanMaterial
-      );
-
-    scanSweep.rotation.x =
-      Math.PI * 0.5;
-
-    globeGroup.add(
-      scanSweep
-    );
-
-    // =========================================================
     // TARGET LOCK
     // =========================================================
-
-    const targetGroup =
-      new THREE.Group();
-
-    globeGroup.add(
-      targetGroup
-    );
-
-    const targetRingGeometry =
-      new THREE.TorusGeometry(
-        0.055,
-        0.004,
-        6,
-        32
-      );
-
-    const targetRingMaterial =
-      new THREE.MeshBasicMaterial({
-        color: 0x73f7ff,
-        transparent: true,
-        opacity: 0,
-        blending:
-          THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-
-    const targetRing =
-      new THREE.Mesh(
-        targetRingGeometry,
-        targetRingMaterial
-      );
-
-    targetGroup.add(
-      targetRing
-    );
-
-    const targetDotGeometry =
-      new THREE.SphereGeometry(
-        0.012,
-        10,
-        10
-      );
-
-    const targetDotMaterial =
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0,
-      });
-
-    const targetDot =
-      new THREE.Mesh(
-        targetDotGeometry,
-        targetDotMaterial
-      );
-
-    targetGroup.add(
-      targetDot
-    );
-
-    const targetPosition =
-      new THREE.Vector3(
-        0.35,
-        0.62,
-        0.72
-      )
-        .normalize()
-        .multiplyScalar(
-          0.905
-        );
-
-    targetGroup.position.copy(
-      targetPosition
-    );
-
-    const targetNormal =
-      targetPosition.clone().normalize();
-
-    targetGroup.quaternion.setFromUnitVectors(
-      new THREE.Vector3(
-        0,
-        0,
-        1
-      ),
-      targetNormal
-    );
-
-    let targetTimer = 0;
-    let targetVisible = false;
 
     // =========================================================
     // TINY SATELLITE
@@ -959,28 +840,6 @@ export default function AtlasGlobe({
       satellite
     );
 
-    const satelliteLineGeometry =
-      new THREE.BufferGeometry();
-
-    const satelliteLineMaterial =
-      new THREE.LineBasicMaterial({
-        color: 0x40eaff,
-        transparent: true,
-        opacity: 0.16,
-        blending:
-          THREE.AdditiveBlending,
-      });
-
-    const satelliteLine =
-      new THREE.Line(
-        satelliteLineGeometry,
-        satelliteLineMaterial
-      );
-
-    scene.add(
-      satelliteLine
-    );
-
     // =========================================================
     // ANIMATION
     // =========================================================
@@ -1005,11 +864,13 @@ export default function AtlasGlobe({
       const {
         listening,
         speaking,
+        thinking,
+        answerReady,
       } =
         voiceStateRef.current;
 
       let rotationSpeed =
-        0.0017;
+        0.0011;
 
       let activity = 0;
 
@@ -1027,12 +888,22 @@ export default function AtlasGlobe({
         activity = 1;
       }
 
+      if (thinking) {
+        rotationSpeed = 0.009;
+        activity = 0.82;
+      }
+
       // -------------------------------------------------------
       // EARTH ROTATION
       // -------------------------------------------------------
 
       globeGroup.rotation.y +=
         rotationSpeed;
+
+      const targetGlobeScale = answerReady ? 1.045 : 1;
+      const nextGlobeScale = globeGroup.scale.x +
+        (targetGlobeScale - globeGroup.scale.x) * 0.045;
+      globeGroup.scale.setScalar(nextGlobeScale);
 
       // -------------------------------------------------------
       // BREATHING
@@ -1141,98 +1012,6 @@ export default function AtlasGlobe({
       );
 
       // -------------------------------------------------------
-      // SCAN SWEEP
-      // -------------------------------------------------------
-
-      scanSweep.rotation.y =
-        elapsed *
-        (
-          speaking
-            ? 0.9
-            : listening
-            ? 0.55
-            : 0.22
-        );
-
-      scanMaterial.opacity =
-        speaking
-          ? 0.85
-          : listening
-          ? 0.55
-          : 0.22;
-
-      // -------------------------------------------------------
-      // TARGET LOCK
-      // -------------------------------------------------------
-
-      targetTimer +=
-        0.016;
-
-      // Activate every ~7 seconds.
-      if (
-        targetTimer > 7 &&
-        !targetVisible
-      ) {
-        targetTimer = 0;
-        targetVisible = true;
-      }
-
-      if (targetVisible) {
-        const lockTime =
-          targetTimer;
-
-        const fadeIn =
-          Math.min(
-            lockTime / 0.5,
-            1
-          );
-
-        const fadeOut =
-          Math.max(
-            0,
-            1 -
-              Math.max(
-                lockTime - 2.2,
-                0
-              ) /
-                0.8
-          );
-
-        const visibility =
-          Math.min(
-            fadeIn,
-            fadeOut
-          );
-
-        targetRingMaterial.opacity =
-          visibility * 0.8;
-
-        targetDotMaterial.opacity =
-          visibility;
-
-        const targetPulse =
-          1 +
-          Math.sin(
-            lockTime * 7
-          ) *
-            0.12;
-
-        targetRing.scale.setScalar(
-          targetPulse
-        );
-
-        if (
-          lockTime > 3
-        ) {
-          targetVisible = false;
-          targetTimer = 0;
-
-          targetRingMaterial.opacity = 0;
-          targetDotMaterial.opacity = 0;
-        }
-      }
-
-      // -------------------------------------------------------
       // SATELLITE
       // -------------------------------------------------------
 
@@ -1269,20 +1048,6 @@ export default function AtlasGlobe({
 
       satellite.rotation.y =
         elapsed * 2;
-
-      // Connection from satellite
-      // toward the globe center.
-      satelliteLineGeometry.setFromPoints(
-        [
-          satellitePosition,
-          satellitePosition
-            .clone()
-            .normalize()
-            .multiplyScalar(
-              0.92
-            ),
-        ]
-      );
 
       satellite.material.opacity =
         listening || speaking

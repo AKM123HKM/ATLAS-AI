@@ -38,7 +38,7 @@ const localSongs = [
 const MUSIC_SEARCH_URL =
   "https://atlas-ai-1wd9.onrender.com/api/music/search";
 
-export default function MusicPlayer({ onClose, songToPlay, controlsRef }) {
+export default function MusicPlayer({ onClose, songToPlay, controlsRef, clarificationPrompt = "" }) {
   // "local" (playing one of the 3 bundled mp3s) or "youtube"
   const [mode, setMode] = useState(null);
 
@@ -184,6 +184,7 @@ export default function MusicPlayer({ onClose, songToPlay, controlsRef }) {
     const trimmed = (query || "").trim();
     if (!trimmed) return;
 
+    setSearchInput(trimmed);
     setActiveTab("online");
     setLoadingSearch(true);
     setSearchError("");
@@ -332,6 +333,21 @@ export default function MusicPlayer({ onClose, songToPlay, controlsRef }) {
   const selectOnlineSong = (video) => {
     setActiveTab("online");
     playSongFromYouTube(video);
+  };
+
+  const searchAndPlay = (query) => {
+    const requestedSong = String(query || "").toLowerCase().trim();
+    if (!requestedSong) return false;
+    const foundLocal = localSongs.find((song) =>
+      song.aliases.some((alias) => requestedSong.includes(alias)),
+    );
+    if (foundLocal) {
+      setActiveTab("local");
+      playLocalSong(foundLocal);
+      return true;
+    }
+    searchOnline(query, { autoPlayFirst: true });
+    return true;
   };
 
   const handleSearchSubmit = (e) => {
@@ -575,6 +591,23 @@ export default function MusicPlayer({ onClose, songToPlay, controlsRef }) {
     return true;
   };
 
+  const clearPlayback = () => {
+    audioRef.current?.pause();
+    if (audioRef.current) audioRef.current.currentTime = 0;
+    try {
+      ytPlayerRef.current?.stopVideo?.();
+    } catch {
+      // Ignore player shutdown errors while resetting the selection.
+    }
+    stopProgressTracking();
+    setMode(null);
+    setCurrentSong(null);
+    setPlaying(false);
+    setProgress(0);
+    setDuration(0);
+    return true;
+  };
+
   // =========================================================
   // CLOSE PLAYER
   // =========================================================
@@ -615,6 +648,8 @@ export default function MusicPlayer({ onClose, songToPlay, controlsRef }) {
       volumeDown,
       mute: muteMusic,
       unmute: unmuteMusic,
+      search: searchAndPlay,
+      clear: clearPlayback,
       close: handleClose,
     };
 
@@ -689,7 +724,7 @@ export default function MusicPlayer({ onClose, songToPlay, controlsRef }) {
             ) : (
               <>
                 <h3>Select a song</h3>
-                <p>Local library or online search</p>
+                <p>{clarificationPrompt || "Local library or online search"}</p>
               </>
             )}
 
