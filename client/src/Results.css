@@ -18,6 +18,96 @@
   color: #dffaff;
 }
 
+/* Photo requests use a gallery view: one credited caption, one image, and a clear return action. */
+.results-page.atlas-image-only-page {
+  padding: 18px clamp(12px, 3vw, 42px);
+}
+
+.atlas-image-only-page .results-header,
+.atlas-image-only-page .results-side,
+.atlas-image-only-page .results-image-card::before,
+.atlas-image-only-page .results-image-card::after,
+.atlas-image-only-page + footer {
+  display: none;
+}
+
+.atlas-image-only-page .results-layout {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.atlas-image-only-page .results-main {
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  gap: 12px;
+}
+
+.atlas-image-only-page .results-image-card {
+  flex: 1 1 auto;
+  width: min(100%, 1200px);
+  min-height: 0;
+  max-height: calc(100dvh - 190px);
+  border-color: rgba(65, 229, 248, 0.48);
+  background: rgba(1, 8, 13, 0.9);
+}
+
+.atlas-image-only-page .results-image-card img {
+  object-fit: contain;
+  opacity: 1;
+}
+
+.atlas-image-only-page .results-content {
+  flex: 0 0 auto;
+  min-height: 0;
+  max-width: 100%;
+  padding: 4px 12px;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: center;
+}
+
+.atlas-image-only-page .results-content::before { display: none; }
+.atlas-image-only-page .results-content p {
+  margin: 0;
+  overflow: hidden;
+  color: #c9f7fc;
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atlas-image-only-page .results-content a { color: inherit; text-decoration: none; }
+.atlas-image-only-page .results-content a:hover { color: #53eaff; text-decoration: underline; }
+
+.atlas-image-return {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid rgba(63, 224, 244, 0.5);
+  background: rgba(10, 68, 78, 0.34);
+  color: #bdeff5;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  cursor: pointer;
+}
+
+.atlas-image-return:hover,
+.atlas-image-return:focus-visible {
+  border-color: #56efff;
+  color: #fff;
+  box-shadow: 0 0 18px rgba(51, 225, 246, 0.18);
+}
+
 /* HUD grid / atmosphere */
 .results-page::before {
   content: "";

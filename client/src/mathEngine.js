@@ -2316,6 +2316,29 @@ function solveCommonWordProblem(input) {
   }
 
   match = text.match(
+    /\b(?:i\s+)?had\s+(\d+(?:\.\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+([a-z]+)\b.*?\b(?:i\s+)?(?:ate|eat|eaten|used|spent|lost|sold|consumed)\s+(\d+(?:\.\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\b.*\b(?:how many|how much|what).*\b(?:left|remain(?:ing)?)\b/i,
+  );
+  if (match) {
+    const starting = Number(naturalToMath(match[1]));
+    const consumed = Number(naturalToMath(match[3]));
+    const remaining = starting - consumed;
+    const item = match[2].replace(/s$/i, "");
+    const itemLabel = remaining === 1 ? item : `${item}s`;
+    return {
+      type: "calculation",
+      title: `${itemLabel.toUpperCase()} LEFT`,
+      expression: input,
+      result: `${fmt(remaining)} ${itemLabel} left`,
+      spokenAnswer: `You have ${fmt(remaining)} ${itemLabel} left.`,
+      numericResult: remaining,
+      steps: [
+        `Starting with ${fmt(starting)} ${match[2]}.`,
+        `Subtract ${fmt(consumed)} ${itemLabel}: ${fmt(starting)} - ${fmt(consumed)} = ${fmt(remaining)}.`,
+      ],
+    };
+  }
+
+  match = text.match(
     /(?:i have|ive got|i have got)\s+(\d+(?:\.\d+)?).*?spent\s+(\d+(?:\.\d+)?).*?(?:then|and)\s+(\d+(?:\.\d+)?)/,
   );
   if (match) {
@@ -2845,6 +2868,7 @@ export function isMathQuestion(input) {
     /quadratic formula/.test(text) ||
     (/probability/.test(text) && /coin/.test(text)) ||
     (/distance/.test(text) && /points?/.test(text)) ||
+    (/\b(?:i\s+)?had\s+(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+[a-z]+\b.*\b(?:ate|eat|eaten|used|spent|lost|sold|consumed)\b.*\b(?:left|remaining)\b/i.test(text)) ||
     (/\b(spent|spend)\b/.test(text) && /\b(left|remaining)\b/.test(text)) ||
     (/(?:km\/h|kph|kilometres? per hour|kilometers? per hour)/.test(text) && /\btime|hours?\b/.test(text)) ||
     (/\b(?:gst|discount)\b/.test(text) && /%/.test(text)) ||
@@ -3348,10 +3372,12 @@ export function solveMath(input) {
 // SPEECH OUTPUT
 // ============================================================
 
-export function mathResultToSpeech(result) {
+export function mathResultToSpeech(result, includeSteps = false) {
   if (!result) {
     return "I could not solve that locally.";
   }
+
+  if (result.spokenAnswer && !includeSteps) return result.spokenAnswer;
 
   let conclusion = "The mathematical calculation is complete.";
   if (result.type === "equation" && result.solutions?.length) {
@@ -3368,11 +3394,11 @@ export function mathResultToSpeech(result) {
       : `The answer is ${result.result}.`;
   }
 
-  const explanation = (result.steps || [])
+  const explanation = includeSteps ? (result.steps || [])
     .filter((step) => !/^(?:result|answer)\s*=|^=/i.test(String(step).trim()))
     .slice(0, 3)
     .map((step) => String(step).trim().replace(/[.!?]+$/g, ""))
-    .filter(Boolean);
+    .filter(Boolean) : [];
 
   return [...explanation, conclusion].join(". ");
 }

@@ -62,6 +62,67 @@ async function fetchImageUrl(query) {
   }
 }
 
+async function searchWikimediaPhoto(query) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const searchUrl =
+      "https://commons.wikimedia.org/w/api.php" +
+      "?action=query&format=json&origin=*&generator=search" +
+      `&gsrsearch=${encodeURIComponent(`${query} filetype:bitmap`)}` +
+      "&gsrlimit=8&gsrnamespace=6&prop=imageinfo|info&inprop=url" +
+      "&iiprop=url|mime|extmetadata&iiurlwidth=1600";
+    const response = await fetch(searchUrl, {
+      signal: controller.signal,
+      headers: { "User-Agent": "ATLAS-AI/1.0 (photo search)" },
+    });
+    if (!response.ok) throw new Error(`Wikimedia returned ${response.status}`);
+
+    const data = await response.json();
+    const pages = Object.values(data?.query?.pages || {});
+    const chosen = pages
+      .sort((left, right) => (left.index ?? Number.MAX_SAFE_INTEGER) - (right.index ?? Number.MAX_SAFE_INTEGER))
+      .map((page) => ({ page, info: page.imageinfo?.[0] }))
+      .find(({ info }) => info && ["image/jpeg", "image/png", "image/webp"].includes(info.mime));
+
+    if (!chosen) return null;
+
+    const cleanMetadata = (value) => String(value || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;|&#160;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&#\d+;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const metadata = chosen.info.extmetadata || {};
+
+    return {
+      imageUrl: chosen.info.thumburl || chosen.info.url || "",
+      title: chosen.page.title?.replace(/^File:/i, "") || query,
+      sourceUrl: chosen.page.descriptionurl || chosen.page.canonicalurl || chosen.page.fullurl || "https://commons.wikimedia.org/",
+      artist: cleanMetadata(metadata.Artist?.value),
+      license: cleanMetadata(metadata.LicenseShortName?.value),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.get("/api/images/search", async (req, res) => {
+  const query = String(req.query.query || "").trim().slice(0, 140);
+  if (!query) return res.status(400).json({ error: "Tell Atlas what photo to find." });
+
+  try {
+    const photo = await searchWikimediaPhoto(query);
+    if (!photo) return res.status(404).json({ error: `No photo found for ${query}.` });
+    return res.json(photo);
+  } catch (error) {
+    console.error("ATLAS PHOTO SEARCH ERROR:", error);
+    return res.status(502).json({ error: "The free Wikimedia photo search is temporarily unavailable." });
+  }
+});
+
 // ============================================================
 // LIVE NEWS
 // Google News RSS — free, no API key
@@ -728,7 +789,8 @@ const MODEL_CANDIDATES = [
 
 async function callOpenRouter(
   systemPrompt,
-  question
+  question,
+  maxTokens = 900
 ) {
   let lastError = null;
 
@@ -764,7 +826,7 @@ async function callOpenRouter(
                 },
               ],
 
-              max_tokens: 1800,
+              max_tokens: maxTokens,
             }),
           }
         );
@@ -841,11 +903,7 @@ use markdown symbols like ** or #. Use plain sentences only.
 TITLE: <a short title for the topic>
 
 ANSWER:
-<paragraph 1>
-
-<paragraph 2>
-
-<paragraph 3 (add a 4th or 5th only if genuinely needed)>
+<brief direct answer; expand only when the user explicitly asks for an explanation>
 
 FACTS:
 - <short fact 1>
@@ -1146,6 +1204,7 @@ app.post(
 
       let newsContext = "";
       let usedLiveNews = false;
+      const explanationRequested = /\b(?:explain|elaborate|in detail|step by step|show (?:the )?(?:steps|working|work)|tell me more)\b/i.test(question);
 
       if (
         isNewsQuery(question)
@@ -1227,12 +1286,18 @@ ANSWER QUALITY:
 - For changing facts such as current leaders, prices, or events, say when
   you cannot verify the latest information. Never present old knowledge as
   confirmed current information.
+- ${explanationRequested ? "The user explicitly requested a detailed explanation; provide the necessary reasoning and detail." : "The user did not request an explanation; return only a short direct summary."}
 
 Do not say you are a language model.
 
 Do not invent facts, sources, or URLs.
 
 ${RESPONSE_TEMPLATE}
+
+FINAL ANSWER LENGTH OVERRIDE:
+${explanationRequested
+    ? "The user explicitly asked for an explanation. Give a clear, organized explanation with only the necessary detail."
+    : "Keep the visible answer to 1-3 concise sentences (roughly 3-4 screen lines). Give a direct answer. For simple arithmetic or word problems, give only the result in a natural sentence. Do not narrate the calculation or repeat the answer in a closing sentence."}
 
 User question:
 ${question}
@@ -1252,7 +1317,8 @@ ${newsContext}
         const result =
           await callOpenRouter(
             systemPrompt,
-            question
+            question,
+            explanationRequested ? 1400 : 500
           );
 
         rawContent =
@@ -1294,14 +1360,26 @@ ${newsContext}
           wasTruncated
         );
 
+      if (!explanationRequested) {
+        const compact = parsed.answer.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.slice(0, 3).join(" ").replace(/\s+/g, " ").trim() || parsed.answer;
+        parsed.answer = compact.length > 420
+          ? `${compact.slice(0, 417).replace(/\s+\S*$/, "").trim()}...`
+          : compact;
+        parsed.paragraphs = [parsed.answer];
+        parsed.keyFacts = [];
+        parsed.imageQuery = "";
+        if (!/\b(?:source|sources|link|links|citation|citations|reference|references)\b/i.test(question)) {
+          parsed.relatedLinks = [];
+        }
+      }
+
       // -------------------------------------
       // FETCH VISUAL
       // -------------------------------------
 
-      const imageUrl =
-        await fetchImageUrl(
-          parsed.imageQuery
-        );
+      const imageUrl = explanationRequested && parsed.imageQuery
+        ? await fetchImageUrl(parsed.imageQuery)
+        : "";
 
       // -------------------------------------
       // RESPONSE

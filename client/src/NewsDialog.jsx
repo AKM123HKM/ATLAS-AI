@@ -80,6 +80,8 @@ export default function NewsDialog({
   onSpeak,
   onNewsLoaded,
 }) {
+  const requestIdRef = useRef(0);
+  const mountedRef = useRef(false);
   const onSpeakRef = useRef(onSpeak);
   onSpeakRef.current = onSpeak;
   const onNewsLoadedRef = useRef(onNewsLoaded);
@@ -97,9 +99,18 @@ export default function NewsDialog({
   const [error, setError] =
     useState("");
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestIdRef.current += 1;
+    };
+  }, []);
+
   const loadNews =
     useCallback(
       async (isRefresh = false) => {
+        const requestId = ++requestIdRef.current;
         if (isRefresh) {
           setRefreshing(true);
         } else {
@@ -115,6 +126,8 @@ export default function NewsDialog({
               { language }
             );
 
+          if (!mountedRef.current || requestId !== requestIdRef.current) return;
+
           setData(result);
           onNewsLoadedRef.current?.(result);
 
@@ -127,6 +140,8 @@ export default function NewsDialog({
             );
           }
         } catch (err) {
+          if (!mountedRef.current || requestId !== requestIdRef.current) return;
+
           console.error(
             "ATLAS NEWS ERROR:",
             err
@@ -137,8 +152,10 @@ export default function NewsDialog({
               "Unable to connect to the live news feed."
           );
         } finally {
-          setLoading(false);
-          setRefreshing(false);
+          if (mountedRef.current && requestId === requestIdRef.current) {
+            setLoading(false);
+            setRefreshing(false);
+          }
         }
       },
       [query, language]

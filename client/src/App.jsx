@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import "./Results.css";
 import "./FuturisticHud.css";
@@ -6,6 +6,8 @@ import MusicPlayer from "./MusicPlayer";
 import WeatherDialog from "./WeatherDialog";
 import MathDialog from "./MathDialog";
 import NewsDialog from "./NewsDialog";
+import PhotoPreview from "./PhotoPreview";
+import { searchAtlasImage } from "./imageSearch";
 import { fetchNewsFollowUp, isNewsQuestion } from "./newsEngine";
 import { parseDictionaryQuestion } from "./dictionaryEngine";
 import { lookupFastDictionary } from "./fastDictionary";
@@ -197,6 +199,58 @@ function isHomeCommandPhrase(value) {
   );
 }
 
+function isBackCloseCommandPhrase(value) {
+  const rawPhrase = String(value || "")
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[^\p{L}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^(?:(?:please|hey|okay|ok|atlas|can you|could you|would you)\s+)+/, "")
+    .replace(/\s+please$/, "")
+    .trim();
+  const phrase = rawPhrase.replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
+
+  return /^(?:(?:(?:go|take me|bring me|navigate|return)(?: back)?(?: to)?\s+)?(?:back|close|cloze|clothes|exit|return|dismiss|leave))(?:\s+(?:(?:the|this)\s+)?(?:atlas|home|news|latest news|dialog|box|page|screen|window|results?)(?:\s+(?:dialog|box|page|screen))?)?$/.test(phrase) ||
+    /^(?:band(?: kar(?:o| do)?)?|wapas(?: jao)?|peeche jao)$/.test(phrase) ||
+    /^(?:वापस|वापस जाओ|पीछे जाओ|बंद|बंद करो|बंद कर दो|होम|घर चलो)$/.test(rawPhrase);
+}
+
+function isTakePhotoCommandPhrase(value) {
+  const phrase = String(value || "")
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[^\p{L}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return /\b(?:take|click|capture|snap)\s+(?:(?:a|my|the)\s+)?(?:photo|picture|pic|selfie)\b/.test(phrase) ||
+    /\b(?:meri|apni)\s+(?:photo|tasveer)\s+(?:lo|khicho|kheencho)\b|\b(?:photo|tasveer)\s+(?:lo|khicho|kheencho)\b/.test(phrase);
+}
+
+function parsePhotoSearchQuery(value) {
+  const phrase = String(value || "")
+    .normalize("NFKC")
+    .replace(/[.,!?]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\s+please$/, "")
+    .trim();
+  const command = phrase.match(/^(?:(?:please|hey atlas|atlas)\s+)?(?:show|display|find|get|give|send|fetch|search(?:\s+for)?)\s+(?:(?:me|us)\s+)?(?:(?:a|an|the|some)\s+)?(?:photos?|pictures?|images?|pics?|photographs?)(?:\s+(?:of|for|showing))?(?:\s+(.+?))?$/i);
+  if (command) return (command[1] || "").replace(/^(?:a|an|the)\s+/i, "").trim();
+
+  const subjectFirst = phrase.match(/^(?:show|give|display|find)\s+(?:me\s+)?(.+?)\s+(?:photo|picture|image|pic)$/i);
+  if (subjectFirst) return subjectFirst[1].replace(/^(?:a|an|the)\s+/i, "").trim();
+
+  const direct = phrase.match(/^(?:photo|picture|image)\s+of\s+(.+)$/i);
+  if (direct) return direct[1].replace(/^(?:a|an|the)\s+/i, "").trim();
+
+  if (/^(?:photo|picture|image|tasveer)\s+(?:dikhao|dikhaiye)$/i.test(phrase)) return "";
+
+  const hinglish = phrase.match(/^(.+?)\s+(?:ki\s+)?(?:photo|tasveer)\s+(?:dikhao|dikhaiye|dikhana)$/i);
+  if (hinglish) return hinglish[1].replace(/^(?:a|an|the)\s+/i, "").trim();
+
+  return null;
+}
+
 function isHindiMusicCommand(value) {
   const phrase = String(value || "").toLowerCase();
   return /(?:गाना|गाने|गीत|संगीत|म्यूजिक|gaana|gana|geet|music)/i.test(phrase) &&
@@ -252,7 +306,8 @@ function App() {
       !showMusicRef.current &&
       !showWeatherRef.current &&
       !showMathRef.current &&
-      !showNewsRef.current
+      !showNewsRef.current &&
+      !showPhotoPreviewRef.current
     ) {
       try {
         wakeWordRecognitionRef.current.stop();
@@ -272,6 +327,9 @@ function App() {
   const [showWeather, setShowWeather] = useState(false);
   const [showMath, setShowMath] = useState(false);
   const [showNews, setShowNews] = useState(false);
+  const [showPhotoPreview, setShowPhotoPreview] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [photoCaptureError, setPhotoCaptureError] = useState("");
   const [newsQuery, setNewsQuery] = useState("latest news");
   const [mathResult, setMathResult] = useState(null);
   const [weatherLocation, setWeatherLocation] = useState("Greater Noida");
@@ -299,6 +357,8 @@ function App() {
 
   const recognitionRef = useRef(null);
   const presenceVideoRef = useRef(null);
+  const pendingPhotoCaptureRef = useRef(false);
+  const takePhotoRef = useRef(null);
   const wakeWordRecognitionRef = useRef(null);
   const dialogCommandRecognitionRef = useRef(null);
   const preferenceRecognitionRef = useRef(null);
@@ -323,6 +383,7 @@ function App() {
   const showWeatherRef = useRef(false);
   const showMathRef = useRef(false);
   const showNewsRef = useRef(false);
+  const showPhotoPreviewRef = useRef(false);
   const showResultsRef = useRef(false);
 
   useEffect(() => {
@@ -342,6 +403,10 @@ function App() {
   }, [showNews]);
 
   useEffect(() => {
+    showPhotoPreviewRef.current = showPhotoPreview;
+  }, [showPhotoPreview]);
+
+  useEffect(() => {
     showResultsRef.current = showResults;
   }, [showResults]);
 
@@ -349,6 +414,8 @@ function App() {
     const hasActiveView =
       showNewsRef.current ||
       showNews ||
+      showPhotoPreviewRef.current ||
+      showPhotoPreview ||
       showMathRef.current ||
       showMath ||
       showWeatherRef.current ||
@@ -368,6 +435,14 @@ function App() {
     if (showNewsRef.current || showNews) {
       setShowNews(false);
       setNewsQuery("latest news");
+    } else if (showPhotoPreviewRef.current || showPhotoPreview) {
+      pendingPhotoCaptureRef.current = false;
+      setShowPhotoPreview(false);
+      setPhotoUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return "";
+      });
+      setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
     } else if (showMathRef.current || showMath) {
       setShowMath(false);
       setMathResult(null);
@@ -415,6 +490,13 @@ function App() {
 
     setShowNews(false);
     setNewsQuery("latest news");
+    pendingPhotoCaptureRef.current = false;
+    setShowPhotoPreview(false);
+    setPhotoCaptureError("");
+    setPhotoUrl((currentUrl) => {
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
+      return "";
+    });
     setShowMath(false);
     setMathResult(null);
     setShowWeather(false);
@@ -716,7 +798,8 @@ function App() {
         throw new Error("Unable to parse this expression locally.");
       }
 
-      setMathResult(result);
+      const explainMath = /\b(?:explain|show (?:the )?(?:steps|working|work)|step by step|how did you solve|show your work)\b/i.test(question);
+      setMathResult(explainMath ? result : { ...result, steps: [] });
       setShowMath(true);
       setUserText(question);
       setAiText("");
@@ -737,7 +820,7 @@ function App() {
           : result.result
             ? pack.math.answerIs(result.result)
             : pack.math.analysisComplete;
-      const spoken = mathResultToSpeech(result) || oldSpoken;
+      const spoken = mathResultToSpeech(result, explainMath) || oldSpoken;
       setTimeout(() => speak(spoken, "en", null, true), 80);
 
       return true;
@@ -1108,6 +1191,102 @@ function App() {
     return true;
   };
 
+  const capturePhoto = useCallback(() => {
+    pendingPhotoCaptureRef.current = false;
+    setPhotoCaptureError("");
+    speechSessionRef.current += 1;
+    window.speechSynthesis.cancel();
+    speechQueueRef.current = [];
+    speechIndexRef.current = 0;
+    setSpeaking(false);
+    setShowNews(false);
+    setShowResults(false);
+    setResult(null);
+    setAiText("");
+    setUserText("");
+    setShowWeather(false);
+    setShowMath(false);
+    setMathResult(null);
+    setShowMusic(false);
+    setSongToPlay(null);
+    setShowPhotoPreview(false);
+    isProcessingRef.current = true;
+
+    const video = presenceVideoRef.current;
+    if (!presenceVideoReady || !video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth) {
+      pendingPhotoCaptureRef.current = true;
+      setShowPhotoPreview(true);
+      if (!presenceArmed) {
+        setPresenceDetected(false);
+        setPresenceArmed(true);
+      }
+      setStatus("CAMERA STARTING // READYING PHOTO CAPTURE");
+      return true;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      setShowPhotoPreview(true);
+      setPhotoCaptureError("Photo capture failed. Please try again.");
+      setStatus("PHOTO CAPTURE FAILED // CAMERA UNAVAILABLE");
+      isProcessingRef.current = false;
+      return true;
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setShowPhotoPreview(true);
+        setPhotoCaptureError("Photo capture failed. Please try again.");
+        setStatus("PHOTO CAPTURE FAILED // TRY AGAIN");
+        isProcessingRef.current = false;
+        return;
+      }
+
+      const capturedUrl = URL.createObjectURL(blob);
+      setPhotoUrl((previousUrl) => {
+        if (previousUrl) URL.revokeObjectURL(previousUrl);
+        return capturedUrl;
+      });
+      setShowPhotoPreview(true);
+      setStatus("PHOTO CAPTURED // SAVED TO DOWNLOADS");
+      isProcessingRef.current = false;
+
+      const download = document.createElement("a");
+      download.href = capturedUrl;
+      download.download = `atlas-photo-${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
+      document.body.appendChild(download);
+      download.click();
+      download.remove();
+    }, "image/jpeg", 0.94);
+
+    return true;
+  }, [presenceArmed, presenceVideoReady]);
+
+  takePhotoRef.current = capturePhoto;
+
+  useEffect(() => {
+    if (presenceVideoReady && pendingPhotoCaptureRef.current) {
+      takePhotoRef.current?.();
+    }
+  }, [presenceVideoReady, capturePhoto]);
+
+  const closePhotoPreview = () => {
+    pendingPhotoCaptureRef.current = false;
+    setShowPhotoPreview(false);
+    setPhotoCaptureError("");
+    setPhotoUrl((currentUrl) => {
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
+      return "";
+    });
+    isProcessingRef.current = false;
+    setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
+    setTimeout(() => startWakeWordDetection(), 300);
+  };
+
   const processQuestion = async (question) => {
     if (!question.trim()) return;
 
@@ -1172,6 +1351,91 @@ function App() {
       setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
       isProcessingRef.current = true;
       speak(clarification, languageRef.current);
+      return;
+    }
+
+    if (isTakePhotoCommandPhrase(question)) {
+      capturePhoto();
+      return;
+    }
+
+    const imageSearchQuery = parsePhotoSearchQuery(question);
+    if (imageSearchQuery !== null) {
+      questionAbortRef.current?.abort();
+      questionAbortRef.current = null;
+      setShowNews(false);
+      setShowWeather(false);
+      setShowMath(false);
+      setShowPhotoPreview(false);
+      setShowMusic(false);
+      setShowResults(false);
+      setResult(null);
+      setUserText(question);
+      setAiText("");
+
+      if (!imageSearchQuery) {
+        const answer = "What should I find a photo of?";
+        setResult({
+          title: "PHOTO SEARCH",
+          answer,
+          paragraphs: [answer],
+          imageQuery: "",
+          imageUrl: "",
+          modelUsed: "ATLAS IMAGE SEARCH",
+        });
+        setShowResults(true);
+        setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
+        isProcessingRef.current = true;
+        speak(answer, "en");
+        return;
+      }
+
+      setStatus("SEARCHING FREE PHOTO ARCHIVE");
+      isProcessingRef.current = true;
+      const controller = new AbortController();
+      questionAbortRef.current = controller;
+
+      try {
+        const photo = await searchAtlasImage(imageSearchQuery, controller.signal);
+        if (controller.signal.aborted || questionGeneration !== questionGenerationRef.current) return;
+        questionAbortRef.current = null;
+
+        const credit = [photo.artist, photo.license].filter(Boolean).join(" / ");
+        const answer = photo.imageUrl
+          ? `Photo of ${imageSearchQuery}${credit ? ` / ${credit}` : ""} / Wikimedia Commons`
+          : `No photo found for ${imageSearchQuery}.`;
+        setResult({
+          title: `PHOTO // ${imageSearchQuery.toUpperCase()}`,
+          answer,
+          paragraphs: [answer],
+          keyFacts: [],
+          relatedLinks: [],
+          imageQuery: imageSearchQuery,
+          imageUrl: photo.imageUrl || "",
+          sourceUrl: photo.sourceUrl || "",
+          modelUsed: "ATLAS IMAGE SEARCH",
+        });
+        setAiText(answer);
+        setShowResults(true);
+        setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
+        speak(photo.imageUrl ? `Here is a photo of ${imageSearchQuery}.` : answer, "en");
+      } catch (error) {
+        if (controller.signal.aborted || questionGeneration !== questionGenerationRef.current) return;
+        questionAbortRef.current = null;
+        const answer = error?.message || "The free photo search is unavailable right now.";
+        setResult({
+          title: "PHOTO SEARCH",
+          answer,
+          paragraphs: [answer],
+          imageQuery: imageSearchQuery,
+          imageUrl: "",
+          modelUsed: "ATLAS IMAGE SEARCH",
+        });
+        setAiText(answer);
+        setShowResults(true);
+        setStatus(getLanguagePack(languageRef.current).systemStatus.speaking);
+        speak(answer, "en");
+      }
       return;
     }
 
@@ -1464,6 +1728,7 @@ function App() {
     if (showWeatherRef.current) return;
     if (showMathRef.current) return;
     if (showNewsRef.current) return;
+    if (showPhotoPreviewRef.current) return;
     if (showResultsRef.current) return;
     if (isProcessingRef.current) return;
 
@@ -1577,6 +1842,7 @@ function App() {
         showWeatherRef.current ||
         showMathRef.current ||
         showNewsRef.current ||
+        showPhotoPreviewRef.current ||
         showResultsRef.current
       ) {
         return;
@@ -1595,6 +1861,7 @@ function App() {
           !showWeatherRef.current &&
           !showMathRef.current &&
           !showNewsRef.current &&
+          !showPhotoPreviewRef.current &&
           !showResultsRef.current
         ) {
           startWakeWordDetection();
@@ -1708,7 +1975,7 @@ function App() {
       }
 
       if (submitTimer) clearTimeout(submitTimer);
-      submitTimer = setTimeout(submitQuestion, 3000);
+      submitTimer = setTimeout(submitQuestion, 2200);
     };
 
     recognition.onerror = (event) => {
@@ -1720,7 +1987,7 @@ function App() {
 
       if (latestTranscript.trim()) {
         if (submitTimer) clearTimeout(submitTimer);
-        submitTimer = setTimeout(submitQuestion, 3000);
+        submitTimer = setTimeout(submitQuestion, 2200);
         return;
       }
 
@@ -1749,7 +2016,7 @@ function App() {
       }
       if (!questionSubmitted && latestTranscript.trim()) {
         if (submitTimer) clearTimeout(submitTimer);
-        submitTimer = setTimeout(submitQuestion, 3000);
+        submitTimer = setTimeout(submitQuestion, 2200);
       } else if (!questionSubmitted) {
         setListening(false);
       }
@@ -1768,7 +2035,7 @@ function App() {
   // when users should not need to say the wake word first.
   useEffect(() => {
     const backCommandActive =
-      showMusic || showWeather || showMath || showNews || showResults;
+      showMusic || showWeather || showMath || showNews || showPhotoPreview || showResults;
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -1788,9 +2055,15 @@ function App() {
 
     const startDialogListener = () => {
       if (disposed) return;
+      let navigationTriggered = false;
 
       // Only one SpeechRecognition instance should own the microphone.
       // When a dialog is open, this command listener takes ownership.
+      wakeSessionIdRef.current += 1;
+      if (wakeWordRecognitionRef.current) {
+        try { wakeWordRecognitionRef.current.stop(); } catch {}
+        wakeWordRecognitionRef.current = null;
+      }
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch {}
         recognitionRef.current = null;
@@ -1809,6 +2082,7 @@ function App() {
       };
 
       recognition.onresult = async (event) => {
+        if (navigationTriggered) return;
         for (let i = event.resultIndex; i < event.results.length; i += 1) {
           const result = event.results[i];
           for (let alternativeIndex = 0; alternativeIndex < result.length; alternativeIndex += 1) {
@@ -1822,15 +2096,33 @@ function App() {
 
             console.log("ATLAS COMMAND LISTENER HEARD:", heard, "=>", phrase);
 
+            if (result.isFinal && parsePhotoSearchQuery(phrase) !== null) {
+              console.log("ATLAS COMMAND MATCH: PHOTO SEARCH");
+              navigationTriggered = true;
+              try { recognition.stop(); } catch {}
+              processQuestion(phrase);
+              return;
+            }
+
+            if (isTakePhotoCommandPhrase(phrase)) {
+              console.log("ATLAS COMMAND MATCH: TAKE PHOTO");
+              takePhotoRef.current?.();
+              return;
+            }
+
             // Navigation always takes priority over player commands.
-            if (isHomeCommandPhrase(phrase) || /\bhome\b/.test(phrase)) {
+            if (isHomeCommandPhrase(phrase)) {
               console.log("ATLAS COMMAND MATCH: HOME");
+              navigationTriggered = true;
+              try { recognition.stop(); } catch {}
               handleHomeRef.current();
               return;
             }
 
-            if (/\b(?:back|close|closed|closer|exit|return|dismiss|leave)\b/i.test(phrase)) {
+            if (isBackCloseCommandPhrase(phrase)) {
               console.log("ATLAS COMMAND MATCH: BACK/CLOSE", phrase);
+              navigationTriggered = true;
+              try { recognition.stop(); } catch {}
               if (showResultsRef.current || showResults) {
                 handleHomeRef.current();
               } else {
@@ -1984,7 +2276,7 @@ function App() {
         if (dialogCommandRecognitionRef.current === recognition) {
           dialogCommandRecognitionRef.current = null;
         }
-        if (!disposed) {
+        if (!disposed && !navigationTriggered) {
           restartTimer = setTimeout(startDialogListener, 100);
         }
       };
@@ -2013,7 +2305,7 @@ function App() {
         // Recognition may already have stopped as the dialog closed.
       }
     };
-  }, [showMusic, showWeather, showMath, showNews, showResults, result?.title]);
+  }, [showMusic, showWeather, showMath, showNews, showPhotoPreview, showResults, result?.title]);
 
   // =========================================================
   // AUTOMATIC BOOT
@@ -2165,6 +2457,10 @@ function App() {
     onCameraReady: () => setPresenceVideoReady(true),
     onDetected: () => {
       setPresenceDetected(true);
+      if (pendingPhotoCaptureRef.current || showPhotoPreviewRef.current) {
+        setStatus("CAMERA READY // PHOTO CAPTURE");
+        return;
+      }
       setStatus("PERSON DETECTED — CAMERA PREVIEW ON");
       const greeting = getLanguagePack("en").greeting;
       setAiText(greeting);
@@ -2172,6 +2468,10 @@ function App() {
     },
     onUnavailable: (error) => {
       console.warn("ATLAS PRESENCE CAMERA UNAVAILABLE:", error);
+      if (pendingPhotoCaptureRef.current) {
+        setPhotoCaptureError("Camera access is unavailable. Check browser camera permission, then try again.");
+      }
+      pendingPhotoCaptureRef.current = false;
       setPresenceVideoReady(false);
       setPresenceArmed(false);
       setPresenceDetected(false);
@@ -2263,7 +2563,7 @@ function App() {
 
       <HudFrame />
 
-      {presenceArmed && (
+      {presenceArmed && result?.modelUsed !== "ATLAS IMAGE SEARCH" && (
         <aside className="presence-camera-card" aria-label="Camera presence detection">
           <div className="presence-camera-heading">
             <span className="status-dot" />
@@ -2406,6 +2706,16 @@ function App() {
         />
       )}
 
+      {showPhotoPreview && (
+        <PhotoPreview
+          photoUrl={photoUrl}
+          error={photoCaptureError}
+          loading={!photoUrl}
+          onClose={closePhotoPreview}
+          onRetake={() => takePhotoRef.current?.()}
+        />
+      )}
+
       {showResults && result ? (
         <>
           <header className="topbar">
@@ -2429,7 +2739,7 @@ function App() {
             </div>
           </header>
 
-          <main className="results-page">
+          <main className={`results-page${result.modelUsed === "ATLAS IMAGE SEARCH" ? " atlas-image-only-page" : ""}`}>
             <div className="results-header">
               <div className="results-label">
                 {result.modelUsed === "ATLAS KNOWLEDGE CORE"
@@ -2464,7 +2774,13 @@ function App() {
                 <div
                   className={`results-content${result.featureList ? " features-content" : ""}${result.modelUsed === "ATLAS KNOWLEDGE CORE" ? " knowledge-content" : ""}`}
                 >
-                  {result.featureList?.length ? (
+                  {result.modelUsed === "ATLAS IMAGE SEARCH" ? (
+                    <p>
+                      {result.sourceUrl ? (
+                        <a href={result.sourceUrl} target="_blank" rel="noopener noreferrer">{result.answer}</a>
+                      ) : result.answer}
+                    </p>
+                  ) : result.featureList?.length ? (
                     <ul className="feature-list">
                       {result.featureList.map((feature, index) => (
                         <li key={index}>{feature}</li>
@@ -2490,6 +2806,12 @@ function App() {
                     )}
                 </div>
 
+                {result.modelUsed === "ATLAS IMAGE SEARCH" && (
+                  <button className="atlas-image-return" type="button" onClick={() => handleHomeRef.current()}>
+                    ← BACK TO ATLAS
+                  </button>
+                )}
+
               </section>
 
               <aside className="results-side">
@@ -2509,7 +2831,7 @@ function App() {
                   <p>
                     {result.modelUsed === "ATLAS KNOWLEDGE CORE"
                       ? "Answered instantly from Atlas’s built-in knowledge."
-                      : "A.T.L.A.S has generated an expanded knowledge report based on your query."}
+                      : "ATLAS // concise answer from connected AI."}
                   </p>
                 </div>
 
@@ -2739,6 +3061,18 @@ function App() {
                   >
                     <span className="quick-btn-dot" />
                     SOLVE MATH
+                  </button>
+                  <button
+                    type="button"
+                    className="quick-btn"
+                    onClick={() => {
+                      if (!isProcessingRef.current) {
+                        processQuestion("Take my photo");
+                      }
+                    }}
+                  >
+                    <span className="quick-btn-dot" />
+                    Take Pic
                   </button>
                 </div>
               </div>
