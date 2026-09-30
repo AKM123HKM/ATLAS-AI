@@ -2537,7 +2537,7 @@ function App() {
           A.T.L.A.S <span>3K</span>
         </h1>
 
-        <p>ADVANCED TECHNOLOGY & LEARNING ASSISTANT SYSTEM</p>
+        <p>A TOTALLY LEGENDARY AI SYSTEM</p>
 
         <p
           style={{
@@ -2937,13 +2937,13 @@ function App() {
           <main className="dashboard">
             <aside className="left-panel">
               <div className="panel brand-panel">
-                <small>ADVANCED TECHNOLOGY</small>
+                <small>A TOTALLY</small>
 
                 <h2>
                   A.T.L.A.S <span>3K</span>
                 </h2>
 
-                <small>INTELLIGENCE SYSTEM</small>
+                <small>LEGENDARY AI SYSTEM</small>
               </div>
 
               <div className="panel">

@@ -78,7 +78,7 @@ const english = {
     whoAreYou: {
       title: "A.T.L.A.S 3K",
       answer:
-        "I am A.T.L.A.S 3K, an Advanced Technology and Learning Assistant System. I am a voice-based AI assistant created as an exhibition prototype.",
+        "I am A.T.L.A.S 3K, an Advanced Technology and Learning Assistant System. I am a voice-based AI assistant created by Ansh Sharma Student of 10th St. Jospeh's School.",
       paragraphs: [
         "I am A.T.L.A.S 3K, an Advanced Technology and Learning Assistant System.",
         "I am designed to interact with users through voice, answer questions, provide information, and present knowledge through an interactive futuristic interface.",
@@ -86,14 +86,14 @@ const english = {
       keyFacts: [
         "Voice-based AI assistant",
         "Designed for interactive learning",
-        "Built as an exhibition prototype",
+        "Built by AnshCoder",
       ],
     },
 
     whatCanYouDo: {
       title: "ATLAS CAPABILITIES",
       answer:
-        "I can listen to your questions through voice, process your requests, answer general knowledge and science questions, and present information through my visual interface.",
+        "I can listen to your questions through voice, process your requests, answer general knowledge and science questions, and present information through my visual interface, you can study news, take photos, know about weather forecast and more to explore",
       paragraphs: [
         "I can listen to spoken questions and respond using voice.",
         "I can answer questions across subjects such as science, general knowledge, technology and other areas supported by my knowledge systems.",
@@ -110,9 +110,9 @@ const english = {
     whoCreatedYou: {
       title: "ATLAS ORIGIN",
       answer:
-        "I was created as an AI exhibition project by my development team as an experimental voice-based learning assistant.",
+        "I was created by Ansh Sharma of class 10th A for the Exhibition project as an experimental voice-based learning assistant that automates your Work life.",
       paragraphs: [
-        "I was created as part of the A.T.L.A.S 3K exhibition project.",
+        "I was created as part of the A.T.L.A.S 3K exhibition project. by Ansh Sharma",
         "The project combines voice interaction, artificial intelligence and a futuristic visual interface to create a more interactive way of accessing information.",
       ],
       keyFacts: [
