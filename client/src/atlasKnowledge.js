@@ -315,7 +315,7 @@ const knowledgeEntries = [
 
 const answerOverrides = {
   identity: "I am ATLAS, an AI-powered personal assistant., ",
-  creator: "I was developed By Atlas team -  Ansh Sharma, Manashv Vaish, Ansh Saha  of class 10th A of St. Joseph's School AI project.",
+  creator: "I was developed By Atlas team -  Ansh Sharma, Manashv Vaish, Ansh Saha of class 10th A of St. Joseph's School AI project.",
   capabilities: "I can perform calculations, answer questions, provide word meanings, access weather information, play songs, and use connected AI services.",
   ai: "Artificial Intelligence is technology that enables computers to perform tasks that normally require human-like abilities such as understanding language, recognising patterns and generating responses.",
   robot: "I am software running on a computer. I can be connected to hardware and robots, but I am not a physical robot.",
