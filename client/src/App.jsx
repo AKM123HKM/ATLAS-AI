@@ -242,11 +242,10 @@ function getInstantNavCommand(value) {
     .replace(/[.,!?।]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
   if (!phrase) return null;
 
-  // Saying just "Atlas" (or "hey Atlas") returns to the globe. Common
-  // mishearings are included. Only the whole utterance can match, so
-  // "hey atlas what's the weather" is not affected.
+  // HOME: only explicit home/Atlas phrases.
   if (
     /^(?:(?:hey|hi|hello|ok|okay)\s+)?(?:atlas|atlass|at last|at las|at less|etlas|adlas|एटलस|एटलास)(?:\s+(?:atlas|एटलस))?$/.test(
       phrase,
@@ -256,19 +255,27 @@ function getInstantNavCommand(value) {
   }
 
   const words = phrase.split(" ");
-  if (words.length > 4) return null;
+  if (words.length > 6) return null;
 
-  const FILLER = /^(?:please|hey|okay|ok|atlas|can|you|could|would|just|now|go|take|me|bring|navigate|to|the|this|that|it|a|at)$/;
-  const CLOSE = /^(?:close|closed|closes|cloze|clothes|cloth|claws|clause|klose|exit|dismiss|leave|back|bak|bag|return|wapas|band|bandh|वापस|बंद|पीछे)$/;
-  const HOME = /^(?:home|होम|घर)$/;
-  const TARGET = /^(?:news|dialog|box|page|screen|window|result|results|weather|music|math|player|karo|kar|do|jao|चलो|करो|दो|जाओ)$/;
+  // Common speech-recognition noise/fillers.
+  const FILLER = /^(?:please|hey|okay|ok|atlas|can|you|could|would|just|now|go|take|me|bring|navigate|to|the|this|that|it|a|an|at|from)$/;
+
+  // Intentionally forgiving: Chrome can return "cloze", "closed",
+  // "bak", etc. while the user is still speaking.
+  const CLOSE = /^(?:close|closed|closes|cloze|clothes|cloth|claws|clause|klose|exit|exits|dismiss|leave|back|bak|bag|return|returns|wapas|wapass|band|bandh|बंद|बंद करो|बंद कर दो|वापस|वापस जाओ|पीछे|पीछे जाओ)$/;
+  const HOME = /^(?:home|dashboard|main|होम|घर)$/;
+  const TARGET = /^(?:news|feed|headlines?|dialog|box|page|screen|window|result|results|report|weather|music|player|math|calculator|photo|preview)$/;
 
   const rest = words.filter((w) => !FILLER.test(w));
   if (!rest.length) return null;
-  if (!rest.every((w) => CLOSE.test(w) || HOME.test(w) || TARGET.test(w))) return null;
+
+  if (!rest.every((w) => CLOSE.test(w) || HOME.test(w) || TARGET.test(w))) {
+    return null;
+  }
 
   if (rest.some((w) => HOME.test(w))) return "home";
   if (rest.some((w) => CLOSE.test(w))) return "back";
+
   return null;
 }
 
@@ -432,6 +439,9 @@ function App() {
   const musicClarificationRef = useRef(false);
   const wakeRestartTimerRef = useRef(null);
   const wakeSessionIdRef = useRef(0);
+  const dialogCommandSessionRef = useRef(0);
+  const dialogCommandRestartTimerRef = useRef(null);
+  const navigationClosingRef = useRef(false);
 
   // Always-current mirrors of showMusic/showWeather, used inside
   // setTimeout/speech callbacks so they never read a stale value
@@ -483,6 +493,20 @@ function App() {
 
     if (!hasActiveView) return false;
 
+    // INSTANT CLOSE: invalidate the active dialog listener before React
+    // state updates. This prevents its onend handler from starting a new
+    // recognition session during the close transition.
+    navigationClosingRef.current = true;
+    dialogCommandSessionRef.current += 1;
+    if (dialogCommandRestartTimerRef.current) {
+      clearTimeout(dialogCommandRestartTimerRef.current);
+      dialogCommandRestartTimerRef.current = null;
+    }
+    if (dialogCommandRecognitionRef.current) {
+      try { dialogCommandRecognitionRef.current.abort(); } catch {}
+      dialogCommandRecognitionRef.current = null;
+    }
+
     speechSessionRef.current += 1;
     window.speechSynthesis.cancel();
     setSpeaking(false);
@@ -521,11 +545,36 @@ function App() {
 
     isProcessingRef.current = false;
     setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
-    setTimeout(() => startWakeWordDetection(), 300);
+    setTimeout(() => {
+      if (
+        !showNewsRef.current &&
+        !showPhotoPreviewRef.current &&
+        !showMathRef.current &&
+        !showWeatherRef.current &&
+        !showMusicRef.current &&
+        !showResultsRef.current
+      ) {
+        navigationClosingRef.current = false;
+        startWakeWordDetection();
+      }
+    }, 150);
     return true;
   };
 
   const handleHome = () => {
+    // INSTANT HOME/CLOSE: kill the command recognizer before any state
+    // transition so no stale onend callback can restart it.
+    navigationClosingRef.current = true;
+    dialogCommandSessionRef.current += 1;
+    if (dialogCommandRestartTimerRef.current) {
+      clearTimeout(dialogCommandRestartTimerRef.current);
+      dialogCommandRestartTimerRef.current = null;
+    }
+    if (dialogCommandRecognitionRef.current) {
+      try { dialogCommandRecognitionRef.current.abort(); } catch {}
+      dialogCommandRecognitionRef.current = null;
+    }
+
     questionGenerationRef.current += 1;
     questionAbortRef.current?.abort();
     questionAbortRef.current = null;
@@ -567,7 +616,19 @@ function App() {
 
     isProcessingRef.current = false;
     setStatus(getLanguagePack(languageRef.current).systemStatus.waitingWake);
-    setTimeout(() => startWakeWordDetection(), 300);
+    setTimeout(() => {
+      if (
+        !showNewsRef.current &&
+        !showPhotoPreviewRef.current &&
+        !showMathRef.current &&
+        !showWeatherRef.current &&
+        !showMusicRef.current &&
+        !showResultsRef.current
+      ) {
+        navigationClosingRef.current = false;
+        startWakeWordDetection();
+      }
+    }, 150);
   };
 
   const handleHomeRef = useRef(handleHome);
@@ -2137,10 +2198,14 @@ function App() {
     let disposed = false;
     let restartTimer = null;
     let recognition = null;
+    const commandSession = ++dialogCommandSessionRef.current;
+    navigationClosingRef.current = false;
     let lastNavTime = 0;
 
     const startDialogListener = () => {
       if (disposed) return;
+      if (navigationClosingRef.current) return;
+      if (dialogCommandSessionRef.current !== commandSession) return;
       let navigationTriggered = false;
 
       // Only one SpeechRecognition instance should own the microphone.
@@ -2190,8 +2255,22 @@ function App() {
               if (now - lastNavTime < 800) return; // ignore duplicate interim results
               lastNavTime = now;
               console.log("ATLAS INSTANT NAV:", nav, "<=", phrase);
-              window.speechSynthesis.cancel(); // silence ATLAS right away
-              try { recognition.abort(); } catch {} // abort = no waiting for final result
+
+              // Kill the recognizer FIRST. React state updates are async, so
+              // the session/closing guards must change before handleBack/
+              // handleHome can schedule anything else.
+              navigationClosingRef.current = true;
+              dialogCommandSessionRef.current += 1;
+              if (restartTimer) {
+                clearTimeout(restartTimer);
+                restartTimer = null;
+              }
+              window.speechSynthesis.cancel();
+              try { recognition.abort(); } catch {}
+              if (dialogCommandRecognitionRef.current === recognition) {
+                dialogCommandRecognitionRef.current = null;
+              }
+
               if (nav === "home" || showResultsRef.current) {
                 handleHomeRef.current();
               } else {
@@ -2369,21 +2448,41 @@ function App() {
         ) {
           disposed = true;
         }
+
+        if (navigationClosingRef.current) {
+          disposed = true;
+        }
       };
 
       recognition.onend = () => {
         setListening(false);
         console.log(
           "ATLAS COMMAND LISTENER: stopped",
-          disposed ? "(closed)" : "(restarting)",
+          disposed || navigationClosingRef.current ? "(closed)" : "(restarting)",
         );
         if (dialogCommandRecognitionRef.current === recognition) {
           dialogCommandRecognitionRef.current = null;
         }
-        // Always restart unless this effect has been cleaned up, so the
-        // listener never goes deaf after a command.
-        if (!disposed) {
-          restartTimer = setTimeout(startDialogListener, 50);
+
+        // NEVER restart after an instant close/home command. Also reject
+        // stale recognizers from an older React effect.
+        if (
+          !disposed &&
+          !navigationClosingRef.current &&
+          dialogCommandSessionRef.current === commandSession &&
+          (showMusicRef.current ||
+            showWeatherRef.current ||
+            showMathRef.current ||
+            showNewsRef.current ||
+            showPhotoPreviewRef.current ||
+            showResultsRef.current)
+        ) {
+          restartTimer = setTimeout(() => {
+            restartTimer = null;
+            dialogCommandRestartTimerRef.current = null;
+            startDialogListener();
+          }, 50);
+          dialogCommandRestartTimerRef.current = restartTimer;
         }
       };
 
@@ -2391,7 +2490,14 @@ function App() {
         recognition.start();
       } catch (error) {
         console.error("ATLAS COMMAND LISTENER START ERROR:", error);
-        if (!disposed) restartTimer = setTimeout(startDialogListener, 100);
+        if (!disposed) {
+          restartTimer = setTimeout(() => {
+            restartTimer = null;
+            dialogCommandRestartTimerRef.current = null;
+            startDialogListener();
+          }, 100);
+          dialogCommandRestartTimerRef.current = restartTimer;
+        }
       }
     };
 
@@ -2401,12 +2507,20 @@ function App() {
       disposed = true;
       setListening(false);
       console.log("ATLAS COMMAND LISTENER: closing");
-      if (restartTimer) clearTimeout(restartTimer);
+      if (restartTimer) {
+        clearTimeout(restartTimer);
+        restartTimer = null;
+      }
+      if (dialogCommandRestartTimerRef.current) {
+        clearTimeout(dialogCommandRestartTimerRef.current);
+        dialogCommandRestartTimerRef.current = null;
+      }
+      dialogCommandSessionRef.current += 1;
       if (dialogCommandRecognitionRef.current === recognition) {
         dialogCommandRecognitionRef.current = null;
       }
       try {
-        recognition?.stop();
+        recognition?.abort();
       } catch (error) {
         // Recognition may already have stopped as the dialog closed.
       }

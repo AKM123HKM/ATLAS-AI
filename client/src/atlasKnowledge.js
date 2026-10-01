@@ -2,9 +2,31 @@ const knowledgeEntries = [
   {
     id: "greeting",
     title: "Hello, I’m Atlas.",
-    answer: "Hello! I’m Atlas, your voice assistant. What would you like to know?",
-    patterns: [/^(?:hello|hi|hey)(?: there)?(?: atlas)?$/],
+    answer:
+      "Hello! I’m Atlas, your voice assistant. What would you like to know?",
+    patterns: [
+      /^(?:hello|hi|hey)(?: there)?(?: atlas)?$/,
+    ],
   },
+
+  {
+    id: "how-are-you",
+    title: "How ATLAS is doing",
+    answer:
+      "I’m doing great and ready to help. What would you like to know?",
+    patterns: [
+      /how are you/,
+      /how are you doing/,
+      /how are u/,
+      /how r you/,
+      /how r u/,
+      /are you doing okay/,
+      /are you doing well/,
+      /how is atlas doing/,
+      /how is atlas/,
+    ],
+  },
+  
   {
     id: "identity",
     title: "Meet Atlas",

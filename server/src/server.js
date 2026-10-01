@@ -897,159 +897,302 @@ async function callOpenRouter(
 // ============================================================
 
 const RESPONSE_TEMPLATE = `
-Respond in EXACTLY this plain-text format. Do not use JSON. Do not
-use markdown symbols like ** or #. Use plain sentences only.
+You are A.T.L.A.S 3K.
 
-TITLE: <a short title for the topic>
+Return the answer using EXACTLY these section labels:
+
+TITLE:
+ANSWER:
+FACTS:
+LINKS:
+IMAGE:
+
+Example:
+
+TITLE:
+Short title here
 
 ANSWER:
-<brief direct answer; expand only when the user explicitly asks for an explanation>
+First paragraph here.
+
+Second paragraph here.
 
 FACTS:
-- <short fact 1>
-- <short fact 2>
-- <short fact 3>
+- Fact one
+- Fact two
+- Fact three
 
 LINKS:
-- <site name> | <full URL> | <one-line description>
+- Wikipedia | https://en.wikipedia.org/ | Reference
 
-IMAGE: <2-4 words describing the main visual subject, plain noun phrase>
+IMAGE:
+Main visual subject
 
-Rules:
-- Keep the ANSWER section to 3-5 paragraphs, each adding new
-  information — no filler.
-- FACTS and LINKS are optional — write "FACTS:" and "LINKS:" with
-  nothing under them if none apply.
-- Only include links to well-known reliable sites
-  (Wikipedia, NASA, Britannica, official gov/org sites).
-- Never guess a URL you're not sure exists — omit it instead.
-- IMAGE should be a plain noun phrase, not a URL.
-- Write ANSWER and everything else only ONCE.
-- For mathematical questions, perform the calculation yourself
-  and explain the result clearly.
+IMPORTANT RULES:
+- Do NOT use Markdown.
+- Do NOT use #.
+- Do NOT use **.
+- Do NOT put labels on the same line as other content.
+- Do NOT repeat any section.
+- Keep TITLE short.
+- ANSWER should contain 3 to 5 useful paragraphs when appropriate.
+- FACTS should contain short bullet points.
+- LINKS must use: site name | full URL | description
+- IMAGE must contain only a short visual subject.
+- Do not invent URLs.
+- If there are no facts, leave FACTS empty.
+- If there are no links, leave LINKS empty.
+- Never write anything before TITLE.
+- Never write anything after IMAGE.
+
+For mathematical questions, calculate the answer correctly and explain the reasoning clearly.
 `;
 
 // ============================================================
 // PARSE ATLAS RESPONSE
 // ============================================================
 
-function parseAtlasResponse(
-  rawContent,
-  wasTruncated
-) {
-  const text =
-    rawContent.trim();
+function parseAtlasResponse(rawContent, wasTruncated) {
+  // ==========================================================
+  // A.T.L.A.S RESPONSE PARSER
+  // Handles both the requested plain format and Markdown-style
+  // responses such as:
+  //
+  // # **TITLE**
+  // **ANSWER:** ...
+  // **FACTS:** ...
+  // **LINKS:** ...
+  //
+  // ==========================================================
 
-  const getSection = (
-    label,
-    nextLabels
-  ) => {
-    const startMatch =
-      text.match(
-        new RegExp(
-          `${label}:\\s*`,
-          "i"
-        )
-      );
+  let text = String(rawContent || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
 
-    if (!startMatch)
-      return "";
+  if (!text) {
+    return {
+      title: "ATLAS Intelligence Report",
+      answer:
+        "I wasn't able to put together a complete answer that time. Please try asking again.",
+      paragraphs: [
+        "I wasn't able to put together a complete answer that time. Please try asking again.",
+      ],
+      keyFacts: [],
+      relatedLinks: [],
+      imageQuery: "",
+    };
+  }
 
-    const startIndex =
-      startMatch.index +
-      startMatch[0].length;
+  // ==========================================================
+  // 1. NORMALIZE MARKDOWN
+  // ==========================================================
 
-    let endIndex =
-      text.length;
+  text = text
+    // Markdown headings
+    .replace(/^#{1,6}\s*/gm, "")
 
-    for (const next of nextLabels) {
-      const nextMatch =
-        text
-          .slice(startIndex)
-          .match(
-            new RegExp(
-              `\\n\\s*${next}:`,
-              "i"
-            )
-          );
+    // Bold / italic markers
+    .replace(/\*\*\*/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/__/g, "")
 
-      if (nextMatch) {
-        endIndex =
-          Math.min(
-            endIndex,
-            startIndex +
-              nextMatch.index
-          );
-      }
-    }
+    // Inline code
+    .replace(/`/g, "")
 
-    return text
-      .slice(
-        startIndex,
-        endIndex
-      )
-      .trim();
-  };
+    // Markdown links:
+    // [Wikipedia](https://...)
+    // becomes:
+    // Wikipedia | https://...
+    .replace(
+      /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+      "$1 | $2"
+    )
 
-  const ALL_LABELS = [
-    "TITLE",
-    "ANSWER",
-    "FACTS",
-    "LINKS",
-    "IMAGE",
+    .trim();
+
+  // ==========================================================
+  // 2. NORMALIZE SECTION LABELS
+  //
+  // Converts:
+  //
+  // **ANSWER:**
+  // ANSWER:
+  // # ANSWER:
+  // answer:
+  //
+  // into:
+  //
+  // ANSWER:
+  // ==========================================================
+
+  text = text.replace(
+    /\b(TITLE|ANSWER|FACTS|LINKS|IMAGE)\s*:/gi,
+    "\n$1:\n"
+  );
+
+  // Clean excessive blank lines
+  text = text
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  // ==========================================================
+  // 3. EXTRACT SECTIONS
+  // ==========================================================
+
+  const sectionRegex =
+    /(?:^|\n)\s*(TITLE|ANSWER|FACTS|LINKS|IMAGE)\s*:\s*/gi;
+
+  const sections = {};
+
+  const matches = [
+    ...text.matchAll(sectionRegex),
   ];
 
-  const title =
-    getSection(
-      "TITLE",
-      ALL_LABELS.filter(
-        (label) =>
-          label !== "TITLE"
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
+
+    const label = match[1].toUpperCase();
+
+    const contentStart =
+      match.index + match[0].length;
+
+    const nextMatch =
+      matches[i + 1];
+
+    const contentEnd = nextMatch
+      ? nextMatch.index
+      : text.length;
+
+    sections[label] = text
+      .slice(
+        contentStart,
+        contentEnd
       )
-    );
+      .trim();
+  }
+
+  // ==========================================================
+  // 4. TITLE
+  // ==========================================================
+
+  let title =
+    sections.TITLE || "";
+
+  // If there was no explicit TITLE section,
+  // use the first meaningful line.
+
+  if (!title) {
+    const beforeAnswer =
+      text.split(
+        /\n\s*ANSWER\s*:/i
+      )[0];
+
+    const lines =
+      beforeAnswer
+        .split("\n")
+        .map((line) =>
+          line.trim()
+        )
+        .filter(Boolean);
+
+    if (lines.length) {
+      title =
+        lines[lines.length - 1];
+    }
+  }
+
+  title = title
+    .replace(/^#+\s*/, "")
+    .replace(/\*\*/g, "")
+    .replace(/__/g, "")
+    .replace(/^["']|["']$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Remove accidental labels
+  title = title.replace(
+    /^(TITLE|ANSWER|FACTS|LINKS|IMAGE)\s*:\s*/i,
+    ""
+  );
+
+  if (!title) {
+    title =
+      "ATLAS Intelligence Report";
+  }
+
+  // ==========================================================
+  // 5. ANSWER
+  // ==========================================================
 
   let answerBlock =
-    getSection(
-      "ANSWER",
-      [
-        "FACTS",
-        "LINKS",
-        "IMAGE",
-      ]
-    );
+    sections.ANSWER || "";
 
-  const factsBlock =
-    getSection(
-      "FACTS",
-      [
-        "LINKS",
-        "IMAGE",
-      ]
-    );
+  answerBlock = answerBlock
+    .replace(/\*\*/g, "")
+    .replace(/__/g, "")
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/`/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  const linksBlock =
-    getSection(
-      "LINKS",
-      ["IMAGE"]
-    );
+  // ==========================================================
+  // 6. ANSWER PARAGRAPHS
+  // ==========================================================
 
-  const imageQuery =
-    getSection(
-      "IMAGE",
-      []
+  let paragraphs = answerBlock
+    .split(/\n\s*\n/)
+    .map((paragraph) =>
+      paragraph
+        .replace(/\s+/g, " ")
+        .trim()
     )
-      .split("\n")[0]
-      .trim();
+    .filter(Boolean);
 
-  let paragraphs =
-    answerBlock
-      .split(/\n\s*\n/)
-      .map((p) =>
-        p
-          .replace(/\s+/g, " ")
-          .trim()
-      )
-      .filter(Boolean);
+  // If the model returned a huge single paragraph,
+  // intelligently break it into readable blocks.
+
+  if (
+    paragraphs.length === 1 &&
+    paragraphs[0].length > 500
+  ) {
+    const sentences =
+      paragraphs[0].match(
+        /[^.!?]+[.!?]+(?=\s|$)/g
+      ) || [paragraphs[0]];
+
+    if (sentences.length >= 4) {
+      const groupSize =
+        Math.ceil(
+          sentences.length / 3
+        );
+
+      const grouped = [];
+
+      for (
+        let i = 0;
+        i < sentences.length;
+        i += groupSize
+      ) {
+        grouped.push(
+          sentences
+            .slice(
+              i,
+              i + groupSize
+            )
+            .join(" ")
+            .trim()
+        );
+      }
+
+      paragraphs =
+        grouped.filter(Boolean);
+    }
+  }
+
+  // ==========================================================
+  // 7. TRUNCATION PROTECTION
+  // ==========================================================
 
   if (
     wasTruncated &&
@@ -1061,7 +1204,7 @@ function parseAtlasResponse(
       ];
 
     const endsCleanly =
-      /[.!?]["')]?$/.test(
+      /[.!?]["')\]]?$/.test(
         last.trim()
       );
 
@@ -1074,91 +1217,190 @@ function parseAtlasResponse(
     }
   }
 
-  const answer =
-    paragraphs.join(
-      "\n\n"
-    );
+  // ==========================================================
+  // 8. FACTS
+  // ==========================================================
 
-  const keyFacts =
-    factsBlock
-      .split("\n")
-      .map((line) =>
-        line
-          .replace(
-            /^-\s*/,
-            ""
-          )
-          .trim()
-      )
-      .filter(Boolean);
+  let factsBlock =
+    sections.FACTS || "";
 
-  const relatedLinks =
+  factsBlock = factsBlock
+    .replace(/\*\*/g, "")
+    .replace(/^#{1,6}\s*/gm, "")
+    .trim();
+
+  let keyFacts = factsBlock
+    .split("\n")
+    .map((line) =>
+      line
+        .replace(/^[-•]\s*/, "")
+        .trim()
+    )
+    .filter(Boolean);
+
+  // Handle inline bullets:
+  //
+  // - Fact one - Fact two - Fact three
+  //
+
+  if (
+    keyFacts.length === 1 &&
+    keyFacts[0].includes(" - ")
+  ) {
+    keyFacts =
+      keyFacts[0]
+        .split(/\s+-\s+/)
+        .map((fact) =>
+          fact.trim()
+        )
+        .filter(Boolean);
+  }
+
+  // ==========================================================
+  // 9. LINKS
+  // ==========================================================
+
+  let linksBlock =
+    sections.LINKS || "";
+
+  linksBlock = linksBlock
+    .replace(/\*\*/g, "")
+    .replace(/^#{1,6}\s*/gm, "")
+    .trim();
+
+  const relatedLinks = [];
+
+  const linkLines =
     linksBlock
       .split("\n")
       .map((line) =>
         line
-          .replace(
-            /^-\s*/,
-            ""
-          )
+          .replace(/^[-•]\s*/, "")
           .trim()
       )
-      .map((line) => {
-        const parts =
-          line
-            .split("|")
-            .map((p) =>
-              p.trim()
-            );
+      .filter(Boolean);
 
-        if (
-          parts.length < 2
-        ) {
-          return null;
-        }
-
-        return {
-          title: parts[0],
-          url: parts[1],
-          description:
-            parts[2] || "",
-        };
-      })
-      .filter(
-        (link) =>
-          link &&
-          /^https?:\/\//.test(
-            link.url
-          )
+  for (const line of linkLines) {
+    const urlMatch =
+      line.match(
+        /https?:\/\/[^\s|)]+/i
       );
 
-  if (
-    paragraphs.length === 0
-  ) {
-    return {
+    if (!urlMatch) {
+      continue;
+    }
+
+    const url =
+      urlMatch[0].replace(
+        /[.,;]+$/,
+        ""
+      );
+
+    const beforeUrl =
+      line
+        .slice(
+          0,
+          line.indexOf(
+            urlMatch[0]
+          )
+        )
+        .replace(/\|$/, "")
+        .trim();
+
+    const parts =
+      beforeUrl
+        .split("|")
+        .map((part) =>
+          part.trim()
+        )
+        .filter(Boolean);
+
+    relatedLinks.push({
       title:
-        title ||
-        "ATLAS Intelligence Report",
+        parts[0] ||
+        "Reference",
 
-      answer:
-        "I wasn't able to put together a complete answer that time. Please try asking again.",
+      url,
 
-      paragraphs: [
-        "I wasn't able to put together a complete answer that time. Please try asking again.",
-      ],
-
-      keyFacts: [],
-
-      relatedLinks: [],
-
-      imageQuery: "",
-    };
+      description:
+        parts[1] || "",
+    });
   }
 
+  // ==========================================================
+  // 10. IMAGE
+  // ==========================================================
+
+  let imageQuery =
+    sections.IMAGE || "";
+
+  imageQuery =
+    imageQuery
+      .replace(/\*\*/g, "")
+      .replace(/^#{1,6}\s*/, "")
+      .split("\n")[0]
+      .trim();
+
+  // ==========================================================
+  // 11. FALLBACK
+  // ==========================================================
+
+  if (paragraphs.length === 0) {
+    paragraphs = [
+      "I wasn't able to put together a complete answer that time. Please try asking again.",
+    ];
+  }
+
+  const answer =
+    paragraphs.join("\n\n");
+
+  // ==========================================================
+  // DEBUG
+  // ==========================================================
+
+  console.log(
+    "========================================"
+  );
+
+  console.log(
+    "ATLAS RESPONSE PARSER"
+  );
+
+  console.log(
+    "TITLE:",
+    title
+  );
+
+  console.log(
+    "PARAGRAPHS:",
+    paragraphs
+  );
+
+  console.log(
+    "FACTS:",
+    keyFacts
+  );
+
+  console.log(
+    "LINKS:",
+    relatedLinks
+  );
+
+  console.log(
+    "IMAGE:",
+    imageQuery
+  );
+
+  console.log(
+    "========================================"
+  );
+
+  // ==========================================================
+  // FINAL STRUCTURED RESPONSE
+  // ==========================================================
+
   return {
-    title:
-      title ||
-      "ATLAS Intelligence Report",
+    title,
 
     answer,
 
