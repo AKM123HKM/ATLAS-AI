@@ -920,74 +920,98 @@ function App() {
 
       return {
         type: "music",
-
         title: "MUSIC PLAYER",
-
         answer: "Opening the music player.",
-
         paragraphs: [],
-
         keyFacts: [],
         relatedLinks: [],
-
         imageQuery: "",
         imageUrl: "",
-
         modelUsed: "LOCAL CORE",
       };
     }
 
     if (localAnswer) {
       console.log("ATLAS: LOCAL RESPONSE");
-
       return localAnswer;
     }
 
     console.log("ATLAS: API REQUEST");
 
-    try {
-      const response = await fetch(
-        "https://atlas-ai-1wd9.onrender.com/api/ask",
-        {
-          method: "POST",
+    const MAX_ATTEMPTS = 4;
+    const RETRY_DELAY_MS = 8000;
+    const RETRYABLE_STATUSES = [502, 503, 504];
 
-          headers: {
-            "Content-Type": "application/json",
+    const sleep = (ms) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, ms);
+        signal?.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(timer);
+            reject(new DOMException("Aborted", "AbortError"));
           },
+          { once: true },
+        );
+      });
 
-          signal,
+    try {
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          const response = await fetch(
+            "https://atlas-ai-1wd9.onrender.com/api/ask",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal,
+              body: JSON.stringify({ question, language: "en" }),
+            },
+          );
 
-          body: JSON.stringify({
-            question,
-            language: "en",
-          }),
-        },
-      );
+          if (response.ok) {
+            return await response.json();
+          }
 
-      if (!response.ok) {
-        throw new Error("Failed to connect to ATLAS backend");
+          // Server waking up or temporarily down: retry
+          if (
+            RETRYABLE_STATUSES.includes(response.status) &&
+            attempt < MAX_ATTEMPTS
+          ) {
+            console.warn(
+              `ATLAS: backend returned ${response.status}, retrying (${attempt}/${MAX_ATTEMPTS})...`,
+            );
+            await sleep(RETRY_DELAY_MS);
+            continue;
+          }
+
+          throw new Error("Failed to connect to ATLAS backend");
+        } catch (innerError) {
+          if (signal?.aborted) throw innerError;
+
+          // Network-level failure (e.g. CORS error on a 502): retry too
+          if (attempt < MAX_ATTEMPTS) {
+            console.warn(
+              `ATLAS: request failed, retrying (${attempt}/${MAX_ATTEMPTS})...`,
+            );
+            await sleep(RETRY_DELAY_MS);
+            continue;
+          }
+
+          throw innerError;
+        }
       }
-
-      const data = await response.json();
-
-      return data;
     } catch (error) {
       if (signal?.aborted) return null;
       console.error("ATLAS API ERROR:", error);
 
       return {
         title: pack.connectionError.title,
-
         answer: pack.connectionError.answer,
-
         paragraphs: [pack.connectionError.paragraph],
-
         keyFacts: [],
         relatedLinks: [],
-
         imageQuery: "",
         imageUrl: "",
-
         modelUsed: "CONNECTION ERROR",
       };
     }
