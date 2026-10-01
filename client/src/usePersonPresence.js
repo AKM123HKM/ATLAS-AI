@@ -7,6 +7,53 @@ const MEDIAPIPE_WASM =
 const FACE_MODEL =
   "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite";
 
+// Labels that usually mean "the laptop's own camera".
+// If your built-in camera has a different name, add it here.
+const BUILT_IN_CAMERA = /integrated|built-?in|internal|facetime|laptop|front|user/i;
+const REAR_CAMERA = /back|rear|environment/i;
+
+const VIDEO_CONSTRAINTS = {
+  width: { ideal: 640 },
+  height: { ideal: 480 },
+  frameRate: { ideal: 15, max: 24 },
+};
+
+async function getExternalCameraStream() {
+  try {
+    const temp = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+    temp.getTracks().forEach((track) => track.stop());
+  } catch (error) {
+    console.warn("ATLAS: permission probe failed", error);
+  }
+
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cameras = devices.filter((device) => device.kind === "videoinput");
+  console.log("ATLAS CAMERAS:", cameras.map((c) => c.label || "(no label)"));
+
+  const chosen =
+    cameras.find((c) => /^hd camera/i.test(c.label)) ||
+    cameras.find((c) => !BUILT_IN_CAMERA.test(c.label)) ||
+    cameras[cameras.length - 1];
+
+  if (chosen) {
+    const attempts = [
+      { deviceId: { exact: chosen.deviceId }, width: { ideal: 640 }, height: { ideal: 480 } },
+      { deviceId: { exact: chosen.deviceId } },
+    ];
+    for (const video of attempts) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video });
+        console.log("ATLAS USING CAMERA:", chosen.label);
+        return stream;
+      } catch (error) {
+        console.warn("ATLAS: camera attempt failed:", error.name, error.message);
+      }
+    }
+  }
+
+  return navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+}
+
 export function usePersonPresence(enabled, videoRef, callbacks = {}) {
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
@@ -53,15 +100,7 @@ export function usePersonPresence(enabled, videoRef, callbacks = {}) {
       }
 
       callbacksRef.current.onStatus?.("ALLOW CAMERA ACCESS TO BEGIN");
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: "user",
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          frameRate: { ideal: 15, max: 24 },
-        },
-      });
+      stream = await getExternalCameraStream();
       if (disposed) {
         stopCamera();
         return;

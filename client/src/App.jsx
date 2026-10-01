@@ -215,6 +215,63 @@ function isBackCloseCommandPhrase(value) {
     /^(?:वापस|वापस जाओ|पीछे जाओ|बंद|बंद करो|बंद कर दो|होम|घर चलो)$/.test(rawPhrase);
 }
 
+
+
+function isInstantBackCommand(value) {
+  const phrase = String(value || "")
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[.,!?।]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Keep this intentionally strict.
+  // We do NOT want phrases like "go back to school" to trigger navigation.
+  return /^(?:back|go back|take me back|bring me back|return|return back|वापस|वापस जाओ|पीछे जाओ)$/.test(
+    phrase
+  );
+}
+
+// Fast, forgiving matcher for close/back/home. Works on interim speech.
+// Only short utterances (4 words or fewer) match, so ATLAS's own spoken
+// answers or normal sentences can't trigger it by accident.
+function getInstantNavCommand(value) {
+  const phrase = String(value || "")
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[.,!?।]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!phrase) return null;
+
+  // Saying just "Atlas" (or "hey Atlas") returns to the globe. Common
+  // mishearings are included. Only the whole utterance can match, so
+  // "hey atlas what's the weather" is not affected.
+  if (
+    /^(?:(?:hey|hi|hello|ok|okay)\s+)?(?:atlas|atlass|at last|at las|at less|etlas|adlas|एटलस|एटलास)(?:\s+(?:atlas|एटलस))?$/.test(
+      phrase,
+    )
+  ) {
+    return "home";
+  }
+
+  const words = phrase.split(" ");
+  if (words.length > 4) return null;
+
+  const FILLER = /^(?:please|hey|okay|ok|atlas|can|you|could|would|just|now|go|take|me|bring|navigate|to|the|this|that|it|a|at)$/;
+  const CLOSE = /^(?:close|closed|closes|cloze|clothes|cloth|claws|clause|klose|exit|dismiss|leave|back|bak|bag|return|wapas|band|bandh|वापस|बंद|पीछे)$/;
+  const HOME = /^(?:home|होम|घर)$/;
+  const TARGET = /^(?:news|dialog|box|page|screen|window|result|results|weather|music|math|player|karo|kar|do|jao|चलो|करो|दो|जाओ)$/;
+
+  const rest = words.filter((w) => !FILLER.test(w));
+  if (!rest.length) return null;
+  if (!rest.every((w) => CLOSE.test(w) || HOME.test(w) || TARGET.test(w))) return null;
+
+  if (rest.some((w) => HOME.test(w))) return "home";
+  if (rest.some((w) => CLOSE.test(w))) return "back";
+  return null;
+}
+
 function isTakePhotoCommandPhrase(value) {
   const phrase = String(value || "")
     .toLowerCase()
@@ -530,6 +587,10 @@ function App() {
 
   useEffect(() => {
     const handleBackShortcut = (event) => {
+      if (event.key === "Escape") {
+        handleHomeRef.current();
+        return;
+      }
       if (event.altKey && event.key === "ArrowLeft") {
         if (handleBackRef.current()) event.preventDefault();
       }
@@ -2052,6 +2113,7 @@ function App() {
     let disposed = false;
     let restartTimer = null;
     let recognition = null;
+    let lastNavTime = 0;
 
     const startDialogListener = () => {
       if (disposed) return;
@@ -2082,7 +2144,6 @@ function App() {
       };
 
       recognition.onresult = async (event) => {
-        if (navigationTriggered) return;
         for (let i = event.resultIndex; i < event.results.length; i += 1) {
           const result = event.results[i];
           for (let alternativeIndex = 0; alternativeIndex < result.length; alternativeIndex += 1) {
@@ -2095,6 +2156,25 @@ function App() {
               .trim();
 
             console.log("ATLAS COMMAND LISTENER HEARD:", heard, "=>", phrase);
+
+            // INSTANT NAVIGATION: fires on interim speech, tolerates common
+            // mishearings, and aborts the recognizer so we never wait for a
+            // final result.
+            const nav = getInstantNavCommand(phrase);
+            if (nav) {
+              const now = Date.now();
+              if (now - lastNavTime < 800) return; // ignore duplicate interim results
+              lastNavTime = now;
+              console.log("ATLAS INSTANT NAV:", nav, "<=", phrase);
+              window.speechSynthesis.cancel(); // silence ATLAS right away
+              try { recognition.abort(); } catch {} // abort = no waiting for final result
+              if (nav === "home" || showResultsRef.current) {
+                handleHomeRef.current();
+              } else {
+                handleBackRef.current();
+              }
+              return;
+            }
 
             if (result.isFinal && parsePhotoSearchQuery(phrase) !== null) {
               console.log("ATLAS COMMAND MATCH: PHOTO SEARCH");
@@ -2276,8 +2356,10 @@ function App() {
         if (dialogCommandRecognitionRef.current === recognition) {
           dialogCommandRecognitionRef.current = null;
         }
-        if (!disposed && !navigationTriggered) {
-          restartTimer = setTimeout(startDialogListener, 100);
+        // Always restart unless this effect has been cleaned up, so the
+        // listener never goes deaf after a command.
+        if (!disposed) {
+          restartTimer = setTimeout(startDialogListener, 50);
         }
       };
 
